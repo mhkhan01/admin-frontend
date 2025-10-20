@@ -1,0 +1,1175 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
+
+interface PropertyAssignmentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (formData: EditableFormData) => void;
+  bookingToAssign: {
+    id: string;
+    booking_request_id?: string;
+    booking_dates?: Array<{ 
+      id: string;
+      start_date?: string;
+      end_date?: string;
+      status?: string;
+    }>;
+    [key: string]: unknown;
+  } | null;
+  selectedProperty: {
+    id: string;
+    property_name?: string;
+    title?: string;
+    property_type?: string;
+    full_address?: string;
+    address?: string;
+    landlord_id?: string;
+    owner?: {
+      full_name?: string;
+      contact_number?: string;
+      email?: string;
+    };
+    [key: string]: unknown;
+  } | null;
+  isNewBooking?: boolean;
+}
+
+interface FormData {
+  booking_date_id: string;
+  start_date: string;
+  end_date: string;
+  postcode: string;
+  contractor_name: string;
+  contractor_email: string;
+  contractor_phone: string;
+  team_size: number;
+  property_name: string;
+  property_type: string;
+  property_address: string;
+  landlord_name: string;
+  landlord_contact: string;
+}
+
+interface EditableFormData {
+  booking_date_id: string;
+  start_date: string;
+  end_date: string;
+  postcode: string;
+  contractor_name: string;
+  contractor_email: string;
+  contractor_phone: string;
+  team_size: number;
+  property_name: string;
+  property_type: string;
+  property_address: string;
+  landlord_name: string;
+  landlord_contact: string;
+}
+
+export default function PropertyAssignmentModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  bookingToAssign,
+  selectedProperty,
+  isNewBooking = false
+}: PropertyAssignmentModalProps) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_formData, setFormData] = useState<FormData | null>(null);
+  const [editableFormData, setEditableFormData] = useState<EditableFormData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_isLoadingBookingData, setIsLoadingBookingData] = useState(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const fetchFormData = async () => {
+    if (!bookingToAssign || !selectedProperty) return;
+    
+    setLoading(true);
+    let actualBookingDateId = ''; // Declare outside try block
+    try {
+      console.log('Booking to assign:', bookingToAssign);
+      console.log('Selected property:', selectedProperty);
+      console.log('Is new booking:', isNewBooking);
+
+      // For new bookings (from "Book Now"), don't fetch any data, just use empty form
+      if (isNewBooking) {
+        console.log('Creating new booking form data without fetching from database');
+        
+        // Fetch landlord data if landlord_id exists
+        let landlord = null;
+        console.log('Selected property landlord_id:', selectedProperty.landlord_id);
+        
+        if (selectedProperty.landlord_id) {
+          try {
+            const { data: landlordData, error: landlordError } = await supabase
+              .from('landlord')
+              .select('*')
+              .eq('id', selectedProperty.landlord_id)
+              .single();
+
+            console.log('Landlord data:', landlordData);
+            console.log('Landlord error:', landlordError);
+
+            if (!landlordError) {
+              landlord = landlordData;
+            } else {
+              console.warn('Could not fetch landlord data:', landlordError);
+            }
+          } catch (error) {
+            console.warn('Error fetching landlord:', error);
+          }
+        } else {
+          console.warn('No landlord_id found in selected property');
+        }
+
+        // Prepare form data for new booking with empty fields (including postcode)
+        const formData: FormData = {
+          booking_date_id: '', // Completely empty for new bookings
+          start_date: '',
+          end_date: '',
+          postcode: '', // Completely empty - will be filled when booking ID is entered
+          contractor_name: '',
+          contractor_email: '',
+          contractor_phone: '',
+          team_size: 0, // Completely empty for new bookings
+          property_name: selectedProperty.property_name || selectedProperty.title || '',
+          property_type: selectedProperty.property_type || '',
+          property_address: selectedProperty.full_address || selectedProperty.address || [
+            selectedProperty.house_address,
+            selectedProperty.locality,
+            selectedProperty.city,
+            selectedProperty.county,
+            selectedProperty.postcode,
+            selectedProperty.country
+          ].filter(Boolean).join(', ') || '',
+          landlord_name: landlord?.full_name || selectedProperty.owner?.full_name || 'Unknown',
+          landlord_contact: landlord?.contact_number || landlord?.email || selectedProperty.owner?.contact_number || selectedProperty.owner?.email || 'Unknown'
+        };
+
+        console.log('New booking form data prepared:', formData);
+        setFormData(formData);
+        setEditableFormData(formData);
+        setLoading(false);
+        return;
+      }
+
+      // For existing bookings: First try to get it from the booking_dates array
+      if (bookingToAssign.booking_dates && bookingToAssign.booking_dates.length > 0) {
+        actualBookingDateId = bookingToAssign.booking_dates[0].id;
+        console.log('Booking date ID from booking_dates array:', actualBookingDateId);
+      }
+
+      // If not found, try to fetch from database
+      if (!actualBookingDateId && bookingToAssign.booking_request_id) {
+        try {
+          const { data: bookingDateData, error: bookingDateError } = await supabase
+            .from('booking_dates')
+            .select('id')
+            .eq('booking_request_id', bookingToAssign.booking_request_id)
+            .single();
+
+          console.log('Booking date data from DB:', bookingDateData);
+          console.log('Booking date error from DB:', bookingDateError);
+
+          if (!bookingDateError && bookingDateData) {
+            actualBookingDateId = bookingDateData.id;
+          }
+        } catch (error) {
+          console.warn('Error fetching booking date ID from DB:', error);
+        }
+      }
+
+      // If still not found, use the composite ID approach
+      if (!actualBookingDateId && bookingToAssign.id.includes('-')) {
+        const dateId = bookingToAssign.id.split('-')[1];
+        actualBookingDateId = dateId;
+        console.log('Using composite ID approach:', actualBookingDateId);
+      }
+
+      console.log('Final booking date ID:', actualBookingDateId);
+
+      // Try to fetch booking request data, but don't fail if it doesn't exist
+      let bookingRequest = null;
+      const bookingRequestId = bookingToAssign.booking_request_id || bookingToAssign.id.split('-')[0];
+      
+      try {
+        const { data: bookingRequestData, error: bookingError } = await supabase
+          .from('booking_requests')
+          .select('*')
+          .eq('id', bookingRequestId)
+          .single();
+
+        console.log('Booking request data:', bookingRequestData);
+        console.log('Booking request error:', bookingError);
+
+        if (!bookingError) {
+          bookingRequest = bookingRequestData;
+        } else {
+          console.warn('Could not fetch booking request, using fallback data');
+        }
+      } catch (error) {
+        console.warn('Error fetching booking request:', error);
+      }
+
+      // Fetch contractor data if user_id exists
+      let contractor = null;
+      if (bookingRequest?.user_id) {
+        try {
+          const { data: contractorData, error: contractorError } = await supabase
+            .from('contractor')
+            .select('*')
+            .eq('id', bookingRequest.user_id)
+            .single();
+
+          console.log('Contractor data:', contractorData);
+          console.log('Contractor error:', contractorError);
+
+          if (!contractorError) {
+            contractor = contractorData;
+          }
+        } catch (error) {
+          console.warn('Error fetching contractor:', error);
+        }
+      }
+
+      // Fetch landlord data if landlord_id exists
+      let landlord = null;
+      console.log('Selected property landlord_id:', selectedProperty.landlord_id);
+      
+      if (selectedProperty.landlord_id) {
+        try {
+          const { data: landlordData, error: landlordError } = await supabase
+            .from('landlord')
+            .select('*')
+            .eq('id', selectedProperty.landlord_id)
+            .single();
+
+          console.log('Landlord data:', landlordData);
+          console.log('Landlord error:', landlordError);
+
+          if (!landlordError) {
+            landlord = landlordData;
+          } else {
+            console.warn('Could not fetch landlord data:', landlordError);
+          }
+        } catch (error) {
+          console.warn('Error fetching landlord:', error);
+        }
+      } else {
+        console.warn('No landlord_id found in selected property');
+      }
+
+      // Prepare form data with fallbacks
+      const formData: FormData = {
+        booking_date_id: actualBookingDateId,
+        start_date: bookingToAssign.booking_dates?.[0]?.start_date || bookingRequest?.start_date || '',
+        end_date: bookingToAssign.booking_dates?.[0]?.end_date || bookingRequest?.end_date || '',
+        postcode: bookingRequest?.project_postcode || (bookingToAssign.project_postcode as string) || '',
+        contractor_name: contractor?.full_name || bookingRequest?.full_name || (bookingToAssign.full_name as string) || '',
+        contractor_email: contractor?.email || bookingRequest?.email || (bookingToAssign.email as string) || '',
+        contractor_phone: bookingRequest?.phone || (bookingToAssign.phone as string) || '',
+        team_size: bookingRequest?.team_size || (bookingToAssign.team_size as number) || 0,
+        property_name: selectedProperty.property_name || selectedProperty.title || '',
+        property_type: selectedProperty.property_type || '',
+        property_address: selectedProperty.full_address || selectedProperty.address || [
+          selectedProperty.house_address,
+          selectedProperty.locality,
+          selectedProperty.city,
+          selectedProperty.county,
+          selectedProperty.postcode,
+          selectedProperty.country
+        ].filter(Boolean).join(', ') || '',
+        landlord_name: landlord?.full_name || selectedProperty.owner?.full_name || 'Unknown',
+        landlord_contact: landlord?.contact_number || landlord?.email || selectedProperty.owner?.contact_number || selectedProperty.owner?.email || 'Unknown'
+      };
+
+      console.log('Form data prepared:', formData);
+      setFormData(formData);
+      setEditableFormData(formData);
+    } catch (error) {
+      console.error('Error fetching form data:', error);
+      // Set a fallback form data even if some queries fail
+      const fallbackData: FormData = {
+        booking_date_id: actualBookingDateId,
+        start_date: bookingToAssign.booking_dates?.[0]?.start_date || '',
+        end_date: bookingToAssign.booking_dates?.[0]?.end_date || '',
+        postcode: (bookingToAssign.project_postcode as string) || '',
+        contractor_name: (bookingToAssign.full_name as string) || '',
+        contractor_email: (bookingToAssign.email as string) || '',
+        contractor_phone: (bookingToAssign.phone as string) || '',
+        team_size: (bookingToAssign.team_size as number) || 0,
+        property_name: selectedProperty.property_name || selectedProperty.title || '',
+        property_type: selectedProperty.property_type || '',
+        property_address: selectedProperty.full_address || selectedProperty.address || [
+          selectedProperty.house_address,
+          selectedProperty.locality,
+          selectedProperty.city,
+          selectedProperty.county,
+          selectedProperty.postcode,
+          selectedProperty.country
+        ].filter(Boolean).join(', ') || '',
+        landlord_name: selectedProperty.owner?.full_name || 'Unknown',
+        landlord_contact: selectedProperty.owner?.contact_number || selectedProperty.owner?.email || 'Unknown'
+      };
+      setFormData(fallbackData);
+      setEditableFormData(fallbackData);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && bookingToAssign && selectedProperty) {
+      setErrorMessage(''); // Clear any previous error messages
+      fetchFormData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, bookingToAssign, selectedProperty]);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleInputChange = (field: keyof EditableFormData, value: string | number) => {
+    if (editableFormData) {
+      setEditableFormData({
+        ...editableFormData,
+        [field]: value
+      });
+    }
+  };
+
+  // Function to fetch booking data when booking ID is entered (only for new bookings)
+  const fetchBookingDataById = async (bookingDateId: string) => {
+    if (!bookingDateId || !isNewBooking || !selectedProperty) return;
+    
+    setIsLoadingBookingData(true);
+    setErrorMessage('');
+    
+    try {
+      console.log('Fetching booking data for ID:', bookingDateId);
+      
+      // Fetch booking date data to get booking_request_id, start_date, and end_date
+      const { data: bookingDateData, error: bookingDateError } = await supabase
+        .from('booking_dates')
+        .select('booking_request_id, start_date, end_date')
+        .eq('id', bookingDateId)
+        .single();
+      
+      if (bookingDateError || !bookingDateData) {
+        console.log('Booking date not found:', bookingDateError);
+        setErrorMessage('Booking ID not found. Please check and try again.');
+        setIsLoadingBookingData(false);
+        return;
+      }
+      
+      console.log('Booking date data found:', bookingDateData);
+      
+      // Fetch booking request data
+      const { data: bookingRequestData, error: bookingRequestError } = await supabase
+        .from('booking_requests')
+        .select('team_size, full_name, email, phone, project_postcode')
+        .eq('id', bookingDateData.booking_request_id)
+        .single();
+      
+      if (bookingRequestError || !bookingRequestData) {
+        console.log('Booking request not found:', bookingRequestError);
+        setErrorMessage('Booking request data not found for this ID.');
+        setIsLoadingBookingData(false);
+        return;
+      }
+      
+      console.log('Booking request data found:', bookingRequestData);
+      
+      // Fetch landlord data if landlord_id exists
+      let landlord = null;
+      if (selectedProperty.landlord_id) {
+        try {
+          const { data: landlordData, error: landlordError } = await supabase
+            .from('landlord')
+            .select('*')
+            .eq('id', selectedProperty.landlord_id)
+            .single();
+
+          if (!landlordError) {
+            landlord = landlordData;
+          }
+        } catch (error) {
+          console.warn('Error fetching landlord:', error);
+        }
+      }
+      
+      // Update form data with fetched information
+      if (editableFormData) {
+        setEditableFormData({
+          ...editableFormData,
+          booking_date_id: bookingDateId,
+          start_date: bookingDateData.start_date,
+          end_date: bookingDateData.end_date,
+          postcode: bookingRequestData.project_postcode || editableFormData.postcode,
+          contractor_name: bookingRequestData.full_name || '',
+          contractor_email: bookingRequestData.email || '',
+          contractor_phone: bookingRequestData.phone || '',
+          team_size: bookingRequestData.team_size || 0,
+          property_name: selectedProperty.property_name || selectedProperty.title || '',
+          property_type: selectedProperty.property_type || '',
+          property_address: selectedProperty.full_address || selectedProperty.address || [
+            selectedProperty.house_address,
+            selectedProperty.locality,
+            selectedProperty.city,
+            selectedProperty.county,
+            selectedProperty.postcode,
+            selectedProperty.country
+          ].filter(Boolean).join(', ') || '',
+          landlord_name: landlord?.full_name || selectedProperty.owner?.full_name || 'Unknown',
+          landlord_contact: landlord?.contact_number || landlord?.email || selectedProperty.owner?.contact_number || selectedProperty.owner?.email || 'Unknown'
+        });
+      }
+      
+      // Clear any error messages after successful data fetch
+      setErrorMessage('');
+    } catch (error) {
+      console.error('Error fetching booking data:', error);
+      setErrorMessage('Error fetching booking data. Please try again.');
+    } finally {
+      setIsLoadingBookingData(false);
+    }
+  };
+
+  // Handle booking ID change with debounce
+  const handleBookingIdChange = (value: string) => {
+    console.log('handleBookingIdChange called with value:', value);
+    console.log('isNewBooking:', isNewBooking);
+    console.log('editableFormData exists:', !!editableFormData);
+    
+    if (!editableFormData) return;
+    
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      console.log('Clearing existing debounce timer');
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    
+    // Update booking ID first
+    setEditableFormData({
+      ...editableFormData,
+      booking_date_id: value
+    });
+    
+    // If booking ID is cleared, reset all auto-filled fields and clear error message
+    if (isNewBooking && !value.trim()) {
+      console.log('Booking ID cleared, resetting form fields');
+      setEditableFormData({
+        ...editableFormData,
+        booking_date_id: '',
+        start_date: '',
+        end_date: '',
+        contractor_name: '',
+        contractor_email: '',
+        contractor_phone: '',
+        team_size: 0,
+        postcode: '', // Keep postcode empty (not property postcode)
+        property_name: selectedProperty?.property_name || selectedProperty?.title || '',
+        property_type: selectedProperty?.property_type || '',
+        property_address: selectedProperty?.full_address || selectedProperty?.address || '',
+        landlord_name: editableFormData.landlord_name,
+        landlord_contact: editableFormData.landlord_contact
+      });
+      setErrorMessage(''); // Clear error message when field is empty
+      setIsLoadingBookingData(false); // Clear loading state
+      return;
+    }
+    
+    // Only fetch if it's a new booking and value is not empty
+    if (isNewBooking && value.trim()) {
+      console.log('Setting up debounce timer for booking ID:', value.trim());
+      // Debounce the fetch - only fetch after user stops typing for 500ms
+      debounceTimerRef.current = setTimeout(() => {
+        console.log('Debounce timer fired, fetching booking data for:', value.trim());
+        fetchBookingDataById(value.trim());
+      }, 500);
+    } else {
+      console.log('Not setting up timer - isNewBooking:', isNewBooking, 'value.trim():', value.trim());
+    }
+  };
+
+  // Function to check for date overlaps
+  const checkDateOverlap = async (propertyId: string, startDate: string, endDate: string) => {
+    try {
+      const { data: existingBookings, error } = await supabase
+        .from('booked_properties')
+        .select('start_date, end_date')
+        .eq('property_id', propertyId);
+
+      if (error) {
+        console.error('Error checking existing bookings:', error);
+        return { hasOverlap: false, error: 'Failed to check existing bookings' };
+      }
+
+      if (!existingBookings || existingBookings.length === 0) {
+        return { hasOverlap: false };
+      }
+
+      // Check for date overlaps
+      for (const booking of existingBookings) {
+        const existingStart = new Date(booking.start_date);
+        const existingEnd = new Date(booking.end_date);
+        const newStart = new Date(startDate);
+        const newEnd = new Date(endDate);
+
+        // Check if dates overlap
+        // Two date ranges overlap if: newStart <= existingEnd AND newEnd >= existingStart
+        if (newStart <= existingEnd && newEnd >= existingStart) {
+          return { 
+            hasOverlap: true, 
+            conflictingDates: `${booking.start_date} to ${booking.end_date}` 
+          };
+        }
+      }
+
+      return { hasOverlap: false };
+    } catch (error) {
+      console.error('Error in date overlap check:', error);
+      return { hasOverlap: false, error: 'Failed to validate dates' };
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editableFormData) {
+      try {
+        setLoading(true);
+        
+        // Fetch contractor_id from contractor table
+        let contractorId = null;
+        if (editableFormData.contractor_name && editableFormData.contractor_email) {
+          const { data: contractorData, error: contractorError } = await supabase
+            .from('contractor')
+            .select('id')
+            .eq('full_name', editableFormData.contractor_name)
+            .eq('email', editableFormData.contractor_email)
+            .single();
+          
+          if (!contractorError && contractorData) {
+            contractorId = contractorData.id;
+            console.log('Contractor found:', contractorId);
+          } else {
+            console.log('Contractor not found in database, proceeding without contractor_id');
+          }
+        }
+
+        // Fetch landlord_id from landlord table
+        let landlordId = null;
+        if (editableFormData.landlord_name && editableFormData.landlord_contact) {
+          // First, try to find landlord by email if landlord_contact looks like an email
+          let landlordQuery = supabase
+            .from('landlord')
+            .select('id')
+            .eq('full_name', editableFormData.landlord_name);
+
+          if (editableFormData.landlord_contact.includes('@')) {
+            // It's an email
+            landlordQuery = landlordQuery.eq('email', editableFormData.landlord_contact);
+          } else {
+            // It's a phone number
+            landlordQuery = landlordQuery.eq('contact_number', editableFormData.landlord_contact);
+          }
+
+          const { data: landlordData, error: landlordError } = await landlordQuery.single();
+          
+          if (!landlordError && landlordData) {
+            landlordId = landlordData.id;
+            console.log('Landlord found:', landlordId);
+          } else {
+            console.log('Landlord not found in database, proceeding without landlord_id');
+          }
+        }
+
+        // Get booking_request_id from booking_dates table and check status
+        let bookingRequestId = null;
+        if (editableFormData.booking_date_id) {
+          const { data: bookingDateData, error: bookingDateError } = await supabase
+            .from('booking_dates')
+            .select('booking_request_id, status')
+            .eq('id', editableFormData.booking_date_id)
+            .single();
+          
+          if (!bookingDateError && bookingDateData) {
+            // Check if booking is already confirmed (only for new bookings)
+            if (isNewBooking && bookingDateData.status === 'confirmed') {
+              setErrorMessage('The booking is already active');
+              setLoading(false);
+              return;
+            }
+            bookingRequestId = bookingDateData.booking_request_id;
+          }
+        }
+
+        // Get property_id from properties table - use selectedProperty directly
+        let propertyId = null;
+        if (selectedProperty && selectedProperty.id) {
+          propertyId = selectedProperty.id;
+          console.log('Using selected property ID:', propertyId);
+        } else if (editableFormData.property_name && editableFormData.property_address) {
+          console.log('Looking up property by name and address...');
+          const { data: propertyData, error: propertyError } = await supabase
+            .from('properties')
+            .select('id')
+            .eq('property_name', editableFormData.property_name)
+            .eq('full_address', editableFormData.property_address)
+            .single();
+          
+          if (!propertyError && propertyData) {
+            propertyId = propertyData.id;
+            console.log('Property found by lookup:', propertyId);
+          } else {
+            console.error('Property lookup error:', propertyError);
+          }
+        }
+
+        // Validate that we have a valid property ID
+        if (!propertyId) {
+          console.error('No property ID found');
+          alert('Error: Could not identify the selected property. Please try again.');
+          return;
+        }
+
+        // Check if property ID is in the new format (PR-1, PR-2, etc.)
+        if (!propertyId.startsWith('PR-')) {
+          console.warn('Property ID is not in expected format:', propertyId);
+          // Try to find the property with the new ID format
+          const { data: propertyCheck, error: propertyCheckError } = await supabase
+            .from('properties')
+            .select('id')
+            .eq('id', propertyId);
+          
+          if (propertyCheckError || !propertyCheck || propertyCheck.length === 0) {
+            console.error('Property not found with ID:', propertyId);
+            alert('Error: Property not found. The property may have been updated. Please refresh and try again.');
+            return;
+          }
+        }
+
+        // Check for date overlaps with existing bookings
+        console.log('Checking for date overlaps...');
+        const overlapCheck = await checkDateOverlap(propertyId, editableFormData.start_date, editableFormData.end_date);
+        
+        if (overlapCheck.error) {
+          setErrorMessage(`Error validating dates: ${overlapCheck.error}`);
+          return;
+        }
+        
+        if (overlapCheck.hasOverlap) {
+          setErrorMessage(`Property is unavailable for the selected duration (${editableFormData.start_date} to ${editableFormData.end_date}). This property is already booked from ${overlapCheck.conflictingDates}. Please look for another property.`);
+          return;
+        }
+        
+        console.log('Date overlap check passed - property is available for the selected dates');
+        setErrorMessage(''); // Clear any previous error messages
+
+        // Prepare the data for booked_properties table
+        const bookedPropertyData = {
+          booking_id: editableFormData.booking_date_id,
+          contractor_id: contractorId,
+          booking_request_id: bookingRequestId,
+          property_id: propertyId,
+          landlord_id: landlordId,
+          start_date: editableFormData.start_date,
+          end_date: editableFormData.end_date,
+          project_postcode: editableFormData.postcode,
+          team_size: editableFormData.team_size,
+          contractor_name: editableFormData.contractor_name,
+          contractor_email: editableFormData.contractor_email,
+          contractor_phone: editableFormData.contractor_phone,
+          property_name: editableFormData.property_name,
+          property_type: editableFormData.property_type,
+          property_address: editableFormData.property_address,
+          landlord_name: editableFormData.landlord_name,
+          landlord_contact: editableFormData.landlord_contact
+        };
+
+        console.log('Saving to booked_properties:', bookedPropertyData);
+        console.log('Property ID for availability update:', propertyId);
+        console.log('Booking date ID for status update:', editableFormData.booking_date_id);
+
+        // Insert into booked_properties table
+        console.log('Attempting to insert into booked_properties:', bookedPropertyData);
+        const { data: insertData, error: insertError } = await supabase
+          .from('booked_properties')
+          .insert([bookedPropertyData])
+          .select();
+
+        if (insertError) {
+          console.error('Error saving to booked_properties:', insertError);
+          console.error('Insert error details:', JSON.stringify(insertError, null, 2));
+          
+          // Check if it's a unique constraint violation
+          if (insertError.code === '23505') {
+            alert('Error: This property assignment already exists. Please check if the booking has already been assigned to a property.');
+          } else if (insertError.code === '23503') {
+            alert('Error: Invalid property or booking reference. Please refresh the page and try again.');
+          } else {
+            alert('Error saving property assignment. Please check the console for details and try again.');
+          }
+          return;
+        } else {
+          console.log('Successfully saved to booked_properties:', insertData);
+          
+          // Update property availability to false
+          if (propertyId) {
+            console.log('Updating property availability for property ID:', propertyId);
+            
+            // First, let's check if the property exists
+            const { data: propertyCheck, error: propertyCheckError } = await supabase
+              .from('properties')
+              .select('id, is_available')
+              .eq('id', propertyId);
+            
+            console.log('Property check result:', propertyCheck);
+            console.log('Property check error:', propertyCheckError);
+            
+            if (propertyCheckError) {
+              console.error('Error checking property:', propertyCheckError);
+              alert('Error checking property. The ID might be incorrect.');
+            } else if (propertyCheck && propertyCheck.length > 0) {
+              // Update the property availability - try different approaches
+              console.log('Attempting property update...');
+              
+              // Try 1: Direct update
+              const { data: propertyUpdateData, error: propertyUpdateError } = await supabase
+                .from('properties')
+                .update({ is_available: false })
+                .eq('id', propertyId)
+                .select('id, is_available');
+              
+              if (propertyUpdateError) {
+                console.error('Error updating property availability:', propertyUpdateError);
+                console.log('Property update error details:', JSON.stringify(propertyUpdateError, null, 2));
+                
+                // Try 2: Update without select
+                console.log('Trying property update without select...');
+                const { error: propertyUpdateError2 } = await supabase
+                  .from('properties')
+                  .update({ is_available: false })
+                  .eq('id', propertyId);
+                
+                if (propertyUpdateError2) {
+                  console.error('Error updating property availability (attempt 2):', propertyUpdateError2);
+                  console.log('Property update error 2 details:', JSON.stringify(propertyUpdateError2, null, 2));
+                  
+                  // Try 3: Use raw SQL approach
+                  console.log('Trying raw SQL update for property...');
+                  const { data: sqlResult, error: sqlError } = await supabase.rpc('update_property_availability', {
+                    property_id: propertyId,
+                    is_available: false
+                  });
+                  
+                  if (sqlError) {
+                    console.error('SQL update failed:', sqlError);
+                    alert('Error updating property availability. Please check the console for details.');
+                  } else {
+                    console.log('Property updated via SQL:', sqlResult);
+                  }
+                } else {
+                  console.log('Property availability updated successfully (attempt 2)');
+                }
+              } else {
+                console.log('Property availability updated successfully:', propertyUpdateData);
+                if (propertyUpdateData && propertyUpdateData.length > 0) {
+                  console.log('Updated property data:', propertyUpdateData[0]);
+                }
+              }
+            } else {
+              console.error('Property not found with ID:', propertyId);
+              alert('Property not found. The ID might be incorrect.');
+            }
+          } else {
+            console.warn('No property ID found, cannot update property availability');
+          }
+
+          // Update booking_dates status to "active"
+          if (editableFormData.booking_date_id) {
+            console.log('Updating booking date status for booking date ID:', editableFormData.booking_date_id);
+            
+            // First, let's check if the booking date exists and get its real ID
+            console.log('Attempting to query booking_dates with ID:', editableFormData.booking_date_id);
+            
+            const { data: bookingDateCheck, error: bookingDateCheckError } = await supabase
+              .from('booking_dates')
+              .select('id, status')
+              .eq('id', editableFormData.booking_date_id);
+            
+            console.log('Booking date check result:', bookingDateCheck);
+            console.log('Booking date check error:', bookingDateCheckError);
+            
+            // If the direct query fails, try a different approach
+            if (bookingDateCheckError) {
+              console.log('Direct query failed, trying alternative approach...');
+              
+              // Try to get all booking dates to see what format they're in
+              const { data: allBookingDates, error: allBookingDatesError } = await supabase
+                .from('booking_dates')
+                .select('id, status')
+                .limit(10);
+              
+              console.log('Sample booking dates:', allBookingDates);
+              console.log('All booking dates error:', allBookingDatesError);
+            }
+            
+            if (bookingDateCheckError) {
+              console.error('Error checking booking date:', bookingDateCheckError);
+              console.log('Since the ID exists (it was fetched to populate the form), trying direct update...');
+              
+              // Try direct update since we know the ID exists
+              console.log('Attempting direct booking date update...');
+              
+              // Try 1: With select - use 'confirmed' instead of 'active'
+              const { data: bookingDateUpdateData, error: bookingDateUpdateError } = await supabase
+                .from('booking_dates')
+                .update({ status: 'confirmed' })
+                .eq('id', editableFormData.booking_date_id)
+                .select('id, status');
+              
+              if (bookingDateUpdateError) {
+                console.error('Error updating booking date status:', bookingDateUpdateError);
+                console.log('Booking date update error details:', JSON.stringify(bookingDateUpdateError, null, 2));
+                
+                // Try 2: Without select - use 'confirmed' instead of 'active'
+                console.log('Trying booking date update without select...');
+                const { error: bookingDateUpdateError2 } = await supabase
+                  .from('booking_dates')
+                  .update({ status: 'confirmed' })
+                  .eq('id', editableFormData.booking_date_id);
+                
+                if (bookingDateUpdateError2) {
+                  console.error('Error updating booking date status (attempt 2):', bookingDateUpdateError2);
+                  console.log('Booking date update error 2 details:', JSON.stringify(bookingDateUpdateError2, null, 2));
+                  
+                  // Try 3: Use raw SQL approach
+                  console.log('Trying raw SQL update for booking date...');
+                  const { data: sqlResult, error: sqlError } = await supabase.rpc('update_booking_date_status', {
+                    booking_date_id: editableFormData.booking_date_id,
+                    status: 'confirmed'
+                  });
+                  
+                  if (sqlError) {
+                    console.error('SQL update failed:', sqlError);
+                    alert('Error updating booking date status. Please check the console for details.');
+                  } else {
+                    console.log('Booking date updated via SQL:', sqlResult);
+                  }
+                } else {
+                  console.log('Booking date status updated successfully (attempt 2)');
+                }
+              } else {
+                console.log('Booking date status updated successfully:', bookingDateUpdateData);
+                if (bookingDateUpdateData && bookingDateUpdateData.length > 0) {
+                  console.log('Updated booking date data:', bookingDateUpdateData[0]);
+                }
+              }
+            } else if (bookingDateCheck && bookingDateCheck.length > 0) {
+              // Update the booking date status - try different approaches
+              console.log('Attempting booking date update...');
+              
+              // Try 1: Direct update with select - use 'confirmed' instead of 'active'
+              const { data: bookingDateUpdateData, error: bookingDateUpdateError } = await supabase
+                .from('booking_dates')
+                .update({ status: 'confirmed' })
+                .eq('id', editableFormData.booking_date_id)
+                .select('id, status');
+              
+              if (bookingDateUpdateError) {
+                console.error('Error updating booking date status:', bookingDateUpdateError);
+                console.log('Booking date update error details:', JSON.stringify(bookingDateUpdateError, null, 2));
+                
+                // Try 2: Update without select - use 'confirmed' instead of 'active'
+                console.log('Trying booking date update without select...');
+                const { error: bookingDateUpdateError2 } = await supabase
+                  .from('booking_dates')
+                  .update({ status: 'confirmed' })
+                  .eq('id', editableFormData.booking_date_id);
+                
+                if (bookingDateUpdateError2) {
+                  console.error('Error updating booking date status (attempt 2):', bookingDateUpdateError2);
+                  console.log('Booking date update error 2 details:', JSON.stringify(bookingDateUpdateError2, null, 2));
+                  
+                  // Try 3: Use the booking date ID from the check result
+                  console.log('Trying with booking date ID from check result...');
+                  const bookingDateId = bookingDateCheck[0].id;
+                  console.log('Using booking date ID from check:', bookingDateId);
+                  
+                  const { error: bookingDateUpdateError3 } = await supabase
+                    .from('booking_dates')
+                    .update({ status: 'confirmed' })
+                    .eq('id', bookingDateId);
+                  
+                  if (bookingDateUpdateError3) {
+                    console.error('Error updating booking date status (attempt 3):', bookingDateUpdateError3);
+                    console.log('Booking date update error 3 details:', JSON.stringify(bookingDateUpdateError3, null, 2));
+                    
+                    // Try 4: Use raw SQL approach
+                    console.log('Trying raw SQL update for booking date...');
+                    const { data: sqlResult, error: sqlError } = await supabase.rpc('update_booking_date_status', {
+                      booking_date_id: bookingDateId,
+                      status: 'confirmed'
+                    });
+                    
+                    if (sqlError) {
+                      console.error('SQL update failed:', sqlError);
+                      alert('Error updating booking date status. Please check the console for details.');
+                    } else {
+                      console.log('Booking date updated via SQL:', sqlResult);
+                    }
+                  } else {
+                    console.log('Booking date status updated successfully (attempt 3)');
+                  }
+                } else {
+                  console.log('Booking date status updated successfully (attempt 2)');
+                }
+              } else {
+                console.log('Booking date status updated successfully:', bookingDateUpdateData);
+                if (bookingDateUpdateData && bookingDateUpdateData.length > 0) {
+                  console.log('Updated booking date data:', bookingDateUpdateData[0]);
+                }
+              }
+            } else {
+              console.error('Booking date not found with ID:', editableFormData.booking_date_id);
+              alert('Booking date not found. The ID might be incorrect.');
+            }
+          } else {
+            console.warn('No booking date ID found, cannot update booking date status');
+          }
+
+          alert('Property assignment saved successfully!');
+          onConfirm(editableFormData);
+          onClose();
+        }
+      } catch (error) {
+        console.error('Error in property assignment:', error);
+        alert('Error saving property assignment. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-screen px-3 pt-4 pb-20 text-center sm:px-4 sm:block sm:p-0">
+        <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={onClose}></div>
+
+        <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+        <div className="inline-block w-[85%] sm:w-full max-w-2xl max-h-[70vh] sm:max-h-none px-3 pt-3 pb-3 sm:px-4 sm:pt-5 sm:pb-4 overflow-y-auto text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle sm:p-6">
+          <div className="sm:flex sm:items-start">
+            <div className="w-full mt-2 sm:mt-3 text-center sm:mt-0 sm:text-left">
+              <h3 className="text-sm sm:text-lg font-medium leading-6 text-gray-900 mb-2 sm:mb-4">
+                Property Assignment Details
+              </h3>
+              
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-booking-teal"></div>
+                </div>
+              ) : editableFormData ? (
+                <form onSubmit={handleSubmit} className="space-y-2 sm:space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 sm:gap-4">
+                    <div>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Booking ID</label>
+                      <input
+                        type="text"
+                        value={editableFormData.booking_date_id}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          handleBookingIdChange(value);
+                        }}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                        placeholder="Enter booking ID to auto-fill..."
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Start Date</label>
+                      <input
+                        type="date"
+                        value={editableFormData.start_date}
+                        onChange={(e) => handleInputChange('start_date', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">End Date</label>
+                      <input
+                        type="date"
+                        value={editableFormData.end_date}
+                        onChange={(e) => handleInputChange('end_date', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Postcode</label>
+                      <input
+                        type="text"
+                        value={editableFormData.postcode}
+                        onChange={(e) => handleInputChange('postcode', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Contractor Name</label>
+                      <input
+                        type="text"
+                        value={editableFormData.contractor_name}
+                        onChange={(e) => handleInputChange('contractor_name', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Contractor Email</label>
+                      <input
+                        type="email"
+                        value={editableFormData.contractor_email}
+                        onChange={(e) => handleInputChange('contractor_email', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Contractor Phone</label>
+                      <input
+                        type="tel"
+                        value={editableFormData.contractor_phone}
+                        onChange={(e) => handleInputChange('contractor_phone', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Team Size</label>
+                      <input
+                        type="number"
+                        value={editableFormData.team_size}
+                        onChange={(e) => handleInputChange('team_size', parseInt(e.target.value) || 0)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Property Name</label>
+                      <input
+                        type="text"
+                        value={editableFormData.property_name}
+                        onChange={(e) => handleInputChange('property_name', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Property Type</label>
+                      <input
+                        type="text"
+                        value={editableFormData.property_type}
+                        onChange={(e) => handleInputChange('property_type', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Property Address</label>
+                      <div className="relative">
+                        <textarea
+                          value={editableFormData.property_address}
+                          onChange={(e) => handleInputChange('property_address', e.target.value)}
+                          rows={1}
+                          className="mt-0.5 sm:mt-1 block w-full px-2 pt-[0.4rem] pb-[0.85rem] sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal resize-none overflow-hidden"
+                          style={{ 
+                            lineHeight: '1.5', 
+                            minHeight: '2.5rem',
+                            display: 'block'
+                          }}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="sm:col-span-1">
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Landlord Name</label>
+                      <input
+                        type="text"
+                        value={editableFormData.landlord_name}
+                        onChange={(e) => handleInputChange('landlord_name', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div className="sm:col-span-1">
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Landlord Contact</label>
+                      <input
+                        type="text"
+                        value={editableFormData.landlord_contact}
+                        onChange={(e) => handleInputChange('landlord_contact', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Error Message Display */}
+                  {errorMessage && (
+                    <div className="mt-2 sm:mt-4 p-2 sm:p-3 bg-red-50 border border-red-200 rounded-md">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-4 w-4 sm:h-5 sm:w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-2 sm:ml-3">
+                          <p className="text-[10px] sm:text-sm text-red-800">{errorMessage}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="mt-3 sm:mt-6 flex justify-end space-x-2 sm:space-x-3">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="px-3 py-1.5 sm:px-4 sm:py-2 text-[10px] sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-booking-teal"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-3 py-1.5 sm:px-4 sm:py-2 text-[10px] sm:text-sm font-medium text-white bg-booking-teal border border-transparent rounded-md shadow-sm hover:bg-booking-teal/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-booking-teal disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? 'Saving...' : 'Confirm Assignment'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="text-center py-4 sm:py-8">
+                  <p className="text-[10px] sm:text-sm text-gray-500">Failed to load form data</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
