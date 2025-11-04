@@ -21,7 +21,7 @@ export default function AdminForgotPasswordPage() {
       console.log('Sending password reset email to:', email);
 
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+        redirectTo: `https://admin.booking-hub.co.uk/auth/reset-password`,
       });
 
       if (resetError) {
