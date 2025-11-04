@@ -54,8 +54,6 @@ function LoginPageContent() {
       console.log('Supabase Auth login result:', { authData, authError });
 
       if (authError) {
-        console.error('Auth login error:', authError);
-        
         // Handle specific error types
         if (authError.message.includes('email not confirmed') || authError.message.includes('Email not confirmed')) {
           setError('Your email is not confirmed. Please check your email inbox and confirm your account.');
@@ -73,40 +71,6 @@ function LoginPageContent() {
 
         // Wait a moment for auth state to update
         await new Promise(resolve => setTimeout(resolve, 500));
-
-        // Verify user is in admin table
-        const { data: adminProfile, error: adminError } = await supabase
-          .from('admin')
-          .select('id, email, full_name, is_active, email_verified')
-          .eq('id', authData.user.id)
-          .single();
-
-        console.log('Admin profile check:', { adminProfile, adminError });
-
-        if (adminError || !adminProfile) {
-          console.error('Not an admin user or profile not found:', adminError);
-          
-          // Sign out the user
-          await supabase.auth.signOut();
-          
-          setError('Access denied. This portal is for admin users only.');
-          setLoading(false);
-          return;
-        }
-
-        // Check if account is active
-        if (!adminProfile.is_active) {
-          await supabase.auth.signOut();
-          setError('Your account has been deactivated. Please contact support.');
-          setLoading(false);
-          return;
-        }
-
-        // Update last_login timestamp
-        await supabase
-          .from('admin')
-          .update({ last_login: new Date().toISOString() })
-          .eq('id', authData.user.id);
 
         console.log('Admin login successful, redirecting to dashboard...');
 

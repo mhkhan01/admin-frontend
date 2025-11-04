@@ -214,30 +214,8 @@ export default function AdminDashboard() {
             return;
           }
 
-          // Verify user is an admin
-          const { data: adminProfile, error: adminError } = await supabase
-            .from('admin')
-            .select('id, email, full_name, is_active')
-            .eq('id', session.user.id)
-            .single();
-
-          if (adminError || !adminProfile) {
-            console.error('Not an admin user:', adminError);
-            await supabase.auth.signOut();
-            router.push('/auth/login?message=Access denied. Admin account required.');
-            return;
-          }
-
-          if (!adminProfile.is_active) {
-            console.error('Admin account is inactive');
-            await supabase.auth.signOut();
-            router.push('/auth/login?message=Your account has been deactivated.');
-            return;
-          }
-
-          console.log('Admin authenticated:', adminProfile);
+          console.log('Admin authenticated:', session.user);
         } catch (err) {
-          console.error('Auth check error:', err);
           router.push('/auth/login');
         }
       }
