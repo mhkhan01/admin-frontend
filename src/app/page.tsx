@@ -215,7 +215,7 @@ export default function AdminDashboard() {
           }
 
           console.log('Admin authenticated:', session.user);
-        } catch (err) {
+        } catch {
           router.push('/auth/login');
         }
       }
