@@ -43,6 +43,60 @@ export default function AdminSignupPage() {
     try {
       console.log('Starting admin signup with data:', data);
 
+      // FIRST: Check if email already exists in admin table (same role)
+      try {
+        const { data: existingAdmin, error: adminCheckError } = await supabase
+          .from('admin')
+          .select('id, email')
+          .eq('email', data.email)
+          .maybeSingle();
+
+        if (existingAdmin && !adminCheckError) {
+          setError('Email already in use');
+          setLoading(false);
+          return;
+        }
+      } catch (adminCheckError) {
+        console.log('Admin table check failed:', adminCheckError);
+        // Continue with signup even if check fails
+      }
+
+      // Check if email already exists in contractor or landlord tables (cross-table validation)
+      try {
+        const { data: existingContractor, error: contractorCheckError } = await supabase
+          .from('contractor')
+          .select('id, email')
+          .eq('email', data.email)
+          .maybeSingle();
+
+        if (existingContractor && !contractorCheckError) {
+          setError('This email is already in use. Try using a different email.');
+          setLoading(false);
+          return;
+        }
+      } catch (contractorCheckError) {
+        console.log('Contractor table check failed:', contractorCheckError);
+        // Continue with signup even if check fails
+      }
+
+      // Check if email exists in landlord table
+      try {
+        const { data: existingLandlord, error: landlordCheckError } = await supabase
+          .from('landlord')
+          .select('id, email')
+          .eq('email', data.email)
+          .maybeSingle();
+
+        if (existingLandlord && !landlordCheckError) {
+          setError('This email is already in use. Try using a different email.');
+          setLoading(false);
+          return;
+        }
+      } catch (landlordCheckError) {
+        console.log('Landlord table check failed:', landlordCheckError);
+        // Continue with signup even if check fails
+      }
+
       // Sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
@@ -163,13 +217,13 @@ export default function AdminSignupPage() {
 
   return (
     <div className="min-h-screen relative overflow-hidden" style={{
-      backgroundImage: 'url(/360_F_281897358_3rj9ZBSZHo5s0L1ug7uuIHadSxh9Cc75.webp)',
+      backgroundImage: 'url(/Houses%20-%202.webp)',
       backgroundSize: 'cover',
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat'
     }}>
       {/* Background Image Opacity Overlay */}
-      <div className="absolute inset-0 bg-white/30 pointer-events-none"></div>
+      <div className="absolute inset-0 bg-[rgba(11,29,55,0.88)] pointer-events-none"></div>
 
       {/* Main content */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen py-4 px-2 sm:py-8 sm:px-4 pb-12 sm:pb-16">
@@ -187,11 +241,6 @@ export default function AdminSignupPage() {
 
         {/* Form Container */}
         <div className="bg-white/95 backdrop-blur-sm rounded-xl sm:rounded shadow-xl sm:shadow-lg p-6 sm:p-6 lg:p-8 w-full max-w-xs sm:max-w-lg lg:max-w-2xl border border-gray-200/50 sm:border-gray-200 mt-4 mb-4 sm:mt-0 sm:mb-0">
-          {/* Introductory Text */}
-          <p className="text-xs sm:text-sm font-extrabold text-orange-300 mb-2 sm:mb-4 text-center pt-1 sm:pt-4 leading-relaxed">
-            Admin Portal - Manage properties, bookings, and users from one central dashboard.
-          </p>
-          
           {/* Form Title */}
           <h1 className="text-base sm:text-2xl lg:text-3xl font-bold text-booking-dark mb-4 sm:mb-8 text-center leading-tight">
             Create Your Admin Account

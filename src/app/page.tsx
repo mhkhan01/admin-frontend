@@ -1945,7 +1945,7 @@ export default function AdminDashboard() {
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {platformUsers.map((user) => (
-                          <tr key={user.id} className="hover:bg-gray-50">
+                          <tr key={`${user.tableName}-${user.id}`} className="hover:bg-gray-50">
                             <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                               <div className="text-xs sm:text-sm font-medium text-gray-900">{user.full_name}</div>
                             </td>
