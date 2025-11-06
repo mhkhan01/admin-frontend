@@ -233,19 +233,19 @@ export class ApiService {
       const [
         ,
         { count: pendingBookingRequests },
-        { count: confirmedBookingRequests },
+        { count: activeBookingsCount },
         { count: completedBookingRequests }
       ] = await Promise.all([
         supabase.from('booking_requests').select('*', { count: 'exact', head: true }),
         supabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'confirmed'),
+        supabase.from('booked_properties').select('*', { count: 'exact', head: true }).eq('status', 'active'),
         supabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'completed')
       ]);
 
       return {
         totalProperties: totalProperties || 0,
         bookedProperties: (totalProperties || 0) - (availableProperties || 0),
-        activeBookings: confirmedBookingRequests || 0,
+        activeBookings: activeBookingsCount || 0,
         pendingBookings: pendingBookingRequests || 0,
         completeBookings: completedBookingRequests || 0,
       };
