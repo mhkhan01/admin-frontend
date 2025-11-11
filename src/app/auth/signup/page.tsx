@@ -153,6 +153,7 @@ export default function AdminSignupPage() {
               </label>
               <input
                 {...register('fullName')}
+                id="fullName"
                 type="text"
                 autoComplete="name"
                 className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-booking-teal rounded focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent ${errors.fullName ? 'border-red-500' : ''}`}
@@ -169,6 +170,7 @@ export default function AdminSignupPage() {
               </label>
               <input
                 {...register('email')}
+                id="email"
                 type="email"
                 autoComplete="email"
                 className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-booking-teal rounded focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent ${errors.email ? 'border-red-500' : ''}`}
@@ -186,6 +188,7 @@ export default function AdminSignupPage() {
               <div className="relative">
                 <input
                   {...register('password')}
+                  id="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   className={`w-full px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 text-sm sm:text-base border border-booking-teal rounded focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent ${errors.password ? 'border-red-500' : ''}`}
@@ -232,6 +235,7 @@ export default function AdminSignupPage() {
               <div className="relative">
                 <input
                   {...register('confirmPassword')}
+                  id="confirmPassword"
                   type={showConfirmPassword ? "text" : "password"}
                   autoComplete="new-password"
                   className={`w-full px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 text-sm sm:text-base border border-booking-teal rounded focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent ${errors.confirmPassword ? 'border-red-500' : ''}`}

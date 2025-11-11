@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import withPWAInit from "@ducanh2912/next-pwa";
+import path from "path";
 
 const withPWA = withPWAInit({
   dest: "public",
@@ -15,7 +16,8 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Explicitly set the workspace root to silence the lockfile warning
+  outputFileTracingRoot: path.join(__dirname, ".."),
 };
 
 export default withPWA(nextConfig);
