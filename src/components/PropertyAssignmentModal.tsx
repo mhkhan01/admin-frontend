@@ -506,477 +506,80 @@ export default function PropertyAssignmentModal({
     }
   };
 
-  // Function to check for date overlaps
-  const checkDateOverlap = async (propertyId: string, startDate: string, endDate: string) => {
-    try {
-      const { data: existingBookings, error } = await supabase
-        .from('booked_properties')
-        .select('start_date, end_date')
-        .eq('property_id', propertyId);
-
-      if (error) {
-        console.error('Error checking existing bookings:', error);
-        return { hasOverlap: false, error: 'Failed to check existing bookings' };
-      }
-
-      if (!existingBookings || existingBookings.length === 0) {
-        return { hasOverlap: false };
-      }
-
-      // Check for date overlaps
-      for (const booking of existingBookings) {
-        const existingStart = new Date(booking.start_date);
-        const existingEnd = new Date(booking.end_date);
-        const newStart = new Date(startDate);
-        const newEnd = new Date(endDate);
-
-        // Check if dates overlap
-        // Two date ranges overlap if: newStart <= existingEnd AND newEnd >= existingStart
-        if (newStart <= existingEnd && newEnd >= existingStart) {
-          return { 
-            hasOverlap: true, 
-            conflictingDates: `${booking.start_date} to ${booking.end_date}` 
-          };
-        }
-      }
-
-      return { hasOverlap: false };
-    } catch (error) {
-      console.error('Error in date overlap check:', error);
-      return { hasOverlap: false, error: 'Failed to validate dates' };
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editableFormData) {
       try {
         setLoading(true);
+        setErrorMessage('');
         
-        // Fetch contractor_id from contractor table
-        let contractorId = null;
-        if (editableFormData.contractor_name && editableFormData.contractor_email) {
-          const { data: contractorData, error: contractorError } = await supabase
-            .from('contractor')
-            .select('id')
-            .eq('full_name', editableFormData.contractor_name)
-            .eq('email', editableFormData.contractor_email)
-            .single();
-          
-          if (!contractorError && contractorData) {
-            contractorId = contractorData.id;
-            console.log('Contractor found:', contractorId);
-          } else {
-            console.log('Contractor not found in database, proceeding without contractor_id');
-          }
+        // Validate required fields
+        if (!editableFormData.booking_date_id) {
+          setErrorMessage('Booking ID is required');
+          setLoading(false);
+          return;
         }
 
-        // Fetch landlord_id from landlord table
-        let landlordId = null;
-        if (editableFormData.landlord_name && editableFormData.landlord_contact) {
-          // First, try to find landlord by email if landlord_contact looks like an email
-          let landlordQuery = supabase
-            .from('landlord')
-            .select('id')
-            .eq('full_name', editableFormData.landlord_name);
-
-          if (editableFormData.landlord_contact.includes('@')) {
-            // It's an email
-            landlordQuery = landlordQuery.eq('email', editableFormData.landlord_contact);
-          } else {
-            // It's a phone number
-            landlordQuery = landlordQuery.eq('contact_number', editableFormData.landlord_contact);
-          }
-
-          const { data: landlordData, error: landlordError } = await landlordQuery.single();
-          
-          if (!landlordError && landlordData) {
-            landlordId = landlordData.id;
-            console.log('Landlord found:', landlordId);
-          } else {
-            console.log('Landlord not found in database, proceeding without landlord_id');
-          }
+        if (!selectedProperty || !selectedProperty.id) {
+          setErrorMessage('Property selection is required');
+          setLoading(false);
+          return;
         }
 
-        // Get booking_request_id from booking_dates table and check if already booked
-        let bookingRequestId = null;
-        if (editableFormData.booking_date_id) {
-          // First, check if this booking already exists in booked_properties
-          const { data: existingBooking, error: existingBookingError } = await supabase
-            .from('booked_properties')
-            .select('id')
-            .eq('booking_id', editableFormData.booking_date_id)
-            .maybeSingle();
+        if (!editableFormData.start_date || !editableFormData.end_date) {
+          setErrorMessage('Start date and end date are required');
+          setLoading(false);
+          return;
+        }
+
+        // Call backend API for property assignment
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+        const response = await fetch(`${backendUrl}/api/property-assignment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            booking_date_id: editableFormData.booking_date_id,
+            property_id: selectedProperty.id,
+            start_date: editableFormData.start_date,
+            end_date: editableFormData.end_date,
+            postcode: editableFormData.postcode,
+            contractor_name: editableFormData.contractor_name,
+            contractor_email: editableFormData.contractor_email,
+            contractor_phone: editableFormData.contractor_phone,
+            team_size: editableFormData.team_size,
+            property_name: editableFormData.property_name,
+            property_type: editableFormData.property_type,
+            property_address: editableFormData.property_address,
+            landlord_name: editableFormData.landlord_name,
+            landlord_contact: editableFormData.landlord_contact
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          console.error('Backend property assignment error:', result);
           
-          if (!existingBookingError && existingBooking) {
-            // Booking already exists in booked_properties
-            setSuccessMessage('');
+          // Handle specific error codes
+          if (result.code === 'BOOKING_ALREADY_EXISTS') {
             setErrorMessage('The booking is already active');
-            setLoading(false);
-            return;
-          }
-          
-          // Get booking_request_id from booking_dates
-          const { data: bookingDateData, error: bookingDateError } = await supabase
-            .from('booking_dates')
-            .select('booking_request_id')
-            .eq('id', editableFormData.booking_date_id)
-            .single();
-          
-          if (!bookingDateError && bookingDateData) {
-            bookingRequestId = bookingDateData.booking_request_id;
-          }
-        }
-
-        // Get property_id from properties table - use selectedProperty directly
-        let propertyId = null;
-        if (selectedProperty && selectedProperty.id) {
-          propertyId = selectedProperty.id;
-          console.log('Using selected property ID:', propertyId);
-        } else if (editableFormData.property_name && editableFormData.property_address) {
-          console.log('Looking up property by name and address...');
-          const { data: propertyData, error: propertyError } = await supabase
-            .from('properties')
-            .select('id')
-            .eq('property_name', editableFormData.property_name)
-            .eq('full_address', editableFormData.property_address)
-            .single();
-          
-          if (!propertyError && propertyData) {
-            propertyId = propertyData.id;
-            console.log('Property found by lookup:', propertyId);
+          } else if (result.code === 'DATE_CONFLICT') {
+            setErrorMessage(result.error || 'Property is unavailable for the selected dates');
           } else {
-            console.error('Property lookup error:', propertyError);
+            setErrorMessage(result.error || 'Error saving property assignment. Please try again.');
           }
-        }
-
-        // Validate that we have a valid property ID
-        if (!propertyId) {
-          console.error('No property ID found');
-          alert('Error: Could not identify the selected property. Please try again.');
+          setLoading(false);
           return;
         }
 
-        // Check if property ID is in the new format (PR-1, PR-2, etc.)
-        if (!propertyId.startsWith('PR-')) {
-          console.warn('Property ID is not in expected format:', propertyId);
-          // Try to find the property with the new ID format
-          const { data: propertyCheck, error: propertyCheckError } = await supabase
-            .from('properties')
-            .select('id')
-            .eq('id', propertyId);
-          
-          if (propertyCheckError || !propertyCheck || propertyCheck.length === 0) {
-            console.error('Property not found with ID:', propertyId);
-            alert('Error: Property not found. The property may have been updated. Please refresh and try again.');
-            return;
-          }
-        }
-
-        // Check for date overlaps with existing bookings
-        console.log('Checking for date overlaps...');
-        const overlapCheck = await checkDateOverlap(propertyId, editableFormData.start_date, editableFormData.end_date);
+        console.log('Successfully saved property assignment:', result);
         
-        if (overlapCheck.error) {
-          setSuccessMessage('');
-          setErrorMessage(`Error validating dates: ${overlapCheck.error}`);
-          return;
-        }
-        
-        if (overlapCheck.hasOverlap) {
-          setSuccessMessage('');
-          setErrorMessage(`Property is unavailable for the selected duration (${editableFormData.start_date} to ${editableFormData.end_date}). This property is already booked from ${overlapCheck.conflictingDates}. Please look for another property.`);
-          return;
-        }
-        
-        console.log('Date overlap check passed - property is available for the selected dates');
-        setErrorMessage(''); // Clear any previous error messages
-
-        // Prepare the data for booked_properties table
-        const bookedPropertyData = {
-          booking_id: editableFormData.booking_date_id,
-          contractor_id: contractorId,
-          booking_request_id: bookingRequestId,
-          property_id: propertyId,
-          landlord_id: landlordId,
-          start_date: editableFormData.start_date,
-          end_date: editableFormData.end_date,
-          project_postcode: editableFormData.postcode,
-          team_size: editableFormData.team_size,
-          contractor_name: editableFormData.contractor_name,
-          contractor_email: editableFormData.contractor_email,
-          contractor_phone: editableFormData.contractor_phone,
-          property_name: editableFormData.property_name,
-          property_type: editableFormData.property_type,
-          property_address: editableFormData.property_address,
-          landlord_name: editableFormData.landlord_name,
-          landlord_contact: editableFormData.landlord_contact
-        };
-
-        console.log('Saving to booked_properties:', bookedPropertyData);
-        console.log('Property ID for availability update:', propertyId);
-        console.log('Booking date ID for status update:', editableFormData.booking_date_id);
-
-        // Insert into booked_properties table
-        console.log('Attempting to insert into booked_properties:', bookedPropertyData);
-        const { data: insertData, error: insertError } = await supabase
-          .from('booked_properties')
-          .insert([bookedPropertyData])
-          .select();
-
-        if (insertError) {
-          console.error('Error saving to booked_properties:', insertError);
-          console.error('Insert error details:', JSON.stringify(insertError, null, 2));
-          
-          // Check if it's a unique constraint violation
-          if (insertError.code === '23505') {
-            alert('Error: This property assignment already exists. Please check if the booking has already been assigned to a property.');
-          } else if (insertError.code === '23503') {
-            alert('Error: Invalid property or booking reference. Please refresh the page and try again.');
-          } else {
-            alert('Error saving property assignment. Please check the console for details and try again.');
-          }
-          return;
-        } else {
-          console.log('Successfully saved to booked_properties:', insertData);
-          
-          // Update property availability to false
-          if (propertyId) {
-            console.log('Updating property availability for property ID:', propertyId);
-            
-            // First, let's check if the property exists
-            const { data: propertyCheck, error: propertyCheckError } = await supabase
-              .from('properties')
-              .select('id, is_available')
-              .eq('id', propertyId);
-            
-            console.log('Property check result:', propertyCheck);
-            console.log('Property check error:', propertyCheckError);
-            
-            if (propertyCheckError) {
-              console.error('Error checking property:', propertyCheckError);
-              alert('Error checking property. The ID might be incorrect.');
-            } else if (propertyCheck && propertyCheck.length > 0) {
-              // Update the property availability - try different approaches
-              console.log('Attempting property update...');
-              
-              // Try 1: Direct update
-              const { data: propertyUpdateData, error: propertyUpdateError } = await supabase
-                .from('properties')
-                .update({ is_available: false })
-                .eq('id', propertyId)
-                .select('id, is_available');
-              
-              if (propertyUpdateError) {
-                console.error('Error updating property availability:', propertyUpdateError);
-                console.log('Property update error details:', JSON.stringify(propertyUpdateError, null, 2));
-                
-                // Try 2: Update without select
-                console.log('Trying property update without select...');
-                const { error: propertyUpdateError2 } = await supabase
-                  .from('properties')
-                  .update({ is_available: false })
-                  .eq('id', propertyId);
-                
-                if (propertyUpdateError2) {
-                  console.error('Error updating property availability (attempt 2):', propertyUpdateError2);
-                  console.log('Property update error 2 details:', JSON.stringify(propertyUpdateError2, null, 2));
-                  
-                  // Try 3: Use raw SQL approach
-                  console.log('Trying raw SQL update for property...');
-                  const { data: sqlResult, error: sqlError } = await supabase.rpc('update_property_availability', {
-                    property_id: propertyId,
-                    is_available: false
-                  });
-                  
-                  if (sqlError) {
-                    console.error('SQL update failed:', sqlError);
-                    alert('Error updating property availability. Please check the console for details.');
-                  } else {
-                    console.log('Property updated via SQL:', sqlResult);
-                  }
-                } else {
-                  console.log('Property availability updated successfully (attempt 2)');
-                }
-              } else {
-                console.log('Property availability updated successfully:', propertyUpdateData);
-                if (propertyUpdateData && propertyUpdateData.length > 0) {
-                  console.log('Updated property data:', propertyUpdateData[0]);
-                }
-              }
-            } else {
-              console.error('Property not found with ID:', propertyId);
-              alert('Property not found. The ID might be incorrect.');
-            }
-          } else {
-            console.warn('No property ID found, cannot update property availability');
-          }
-
-          // Update booking_dates status to "active"
-          if (editableFormData.booking_date_id) {
-            console.log('Updating booking date status for booking date ID:', editableFormData.booking_date_id);
-            
-            // First, let's check if the booking date exists and get its real ID
-            console.log('Attempting to query booking_dates with ID:', editableFormData.booking_date_id);
-            
-            const { data: bookingDateCheck, error: bookingDateCheckError } = await supabase
-              .from('booking_dates')
-              .select('id, status')
-              .eq('id', editableFormData.booking_date_id);
-            
-            console.log('Booking date check result:', bookingDateCheck);
-            console.log('Booking date check error:', bookingDateCheckError);
-            
-            // If the direct query fails, try a different approach
-            if (bookingDateCheckError) {
-              console.log('Direct query failed, trying alternative approach...');
-              
-              // Try to get all booking dates to see what format they're in
-              const { data: allBookingDates, error: allBookingDatesError } = await supabase
-                .from('booking_dates')
-                .select('id, status')
-                .limit(10);
-              
-              console.log('Sample booking dates:', allBookingDates);
-              console.log('All booking dates error:', allBookingDatesError);
-            }
-            
-            if (bookingDateCheckError) {
-              console.error('Error checking booking date:', bookingDateCheckError);
-              console.log('Since the ID exists (it was fetched to populate the form), trying direct update...');
-              
-              // Try direct update since we know the ID exists
-              console.log('Attempting direct booking date update...');
-              
-              // Try 1: With select - use 'confirmed' instead of 'active'
-              const { data: bookingDateUpdateData, error: bookingDateUpdateError } = await supabase
-                .from('booking_dates')
-                .update({ status: 'confirmed' })
-                .eq('id', editableFormData.booking_date_id)
-                .select('id, status');
-              
-              if (bookingDateUpdateError) {
-                console.error('Error updating booking date status:', bookingDateUpdateError);
-                console.log('Booking date update error details:', JSON.stringify(bookingDateUpdateError, null, 2));
-                
-                // Try 2: Without select - use 'confirmed' instead of 'active'
-                console.log('Trying booking date update without select...');
-                const { error: bookingDateUpdateError2 } = await supabase
-                  .from('booking_dates')
-                  .update({ status: 'confirmed' })
-                  .eq('id', editableFormData.booking_date_id);
-                
-                if (bookingDateUpdateError2) {
-                  console.error('Error updating booking date status (attempt 2):', bookingDateUpdateError2);
-                  console.log('Booking date update error 2 details:', JSON.stringify(bookingDateUpdateError2, null, 2));
-                  
-                  // Try 3: Use raw SQL approach
-                  console.log('Trying raw SQL update for booking date...');
-                  const { data: sqlResult, error: sqlError } = await supabase.rpc('update_booking_date_status', {
-                    booking_date_id: editableFormData.booking_date_id,
-                    status: 'confirmed'
-                  });
-                  
-                  if (sqlError) {
-                    console.error('SQL update failed:', sqlError);
-                    alert('Error updating booking date status. Please check the console for details.');
-                  } else {
-                    console.log('Booking date updated via SQL:', sqlResult);
-                  }
-                } else {
-                  console.log('Booking date status updated successfully (attempt 2)');
-                }
-              } else {
-                console.log('Booking date status updated successfully:', bookingDateUpdateData);
-                if (bookingDateUpdateData && bookingDateUpdateData.length > 0) {
-                  console.log('Updated booking date data:', bookingDateUpdateData[0]);
-                }
-              }
-            } else if (bookingDateCheck && bookingDateCheck.length > 0) {
-              // Update the booking date status - try different approaches
-              console.log('Attempting booking date update...');
-              
-              // Try 1: Direct update with select - use 'confirmed' instead of 'active'
-              const { data: bookingDateUpdateData, error: bookingDateUpdateError } = await supabase
-                .from('booking_dates')
-                .update({ status: 'confirmed' })
-                .eq('id', editableFormData.booking_date_id)
-                .select('id, status');
-              
-              if (bookingDateUpdateError) {
-                console.error('Error updating booking date status:', bookingDateUpdateError);
-                console.log('Booking date update error details:', JSON.stringify(bookingDateUpdateError, null, 2));
-                
-                // Try 2: Update without select - use 'confirmed' instead of 'active'
-                console.log('Trying booking date update without select...');
-                const { error: bookingDateUpdateError2 } = await supabase
-                  .from('booking_dates')
-                  .update({ status: 'confirmed' })
-                  .eq('id', editableFormData.booking_date_id);
-                
-                if (bookingDateUpdateError2) {
-                  console.error('Error updating booking date status (attempt 2):', bookingDateUpdateError2);
-                  console.log('Booking date update error 2 details:', JSON.stringify(bookingDateUpdateError2, null, 2));
-                  
-                  // Try 3: Use the booking date ID from the check result
-                  console.log('Trying with booking date ID from check result...');
-                  const bookingDateId = bookingDateCheck[0].id;
-                  console.log('Using booking date ID from check:', bookingDateId);
-                  
-                  const { error: bookingDateUpdateError3 } = await supabase
-                    .from('booking_dates')
-                    .update({ status: 'confirmed' })
-                    .eq('id', bookingDateId);
-                  
-                  if (bookingDateUpdateError3) {
-                    console.error('Error updating booking date status (attempt 3):', bookingDateUpdateError3);
-                    console.log('Booking date update error 3 details:', JSON.stringify(bookingDateUpdateError3, null, 2));
-                    
-                    // Try 4: Use raw SQL approach
-                    console.log('Trying raw SQL update for booking date...');
-                    const { data: sqlResult, error: sqlError } = await supabase.rpc('update_booking_date_status', {
-                      booking_date_id: bookingDateId,
-                      status: 'confirmed'
-                    });
-                    
-                    if (sqlError) {
-                      console.error('SQL update failed:', sqlError);
-                      alert('Error updating booking date status. Please check the console for details.');
-                    } else {
-                      console.log('Booking date updated via SQL:', sqlResult);
-                    }
-                  } else {
-                    console.log('Booking date status updated successfully (attempt 3)');
-                  }
-                } else {
-                  console.log('Booking date status updated successfully (attempt 2)');
-                }
-              } else {
-                console.log('Booking date status updated successfully:', bookingDateUpdateData);
-                if (bookingDateUpdateData && bookingDateUpdateData.length > 0) {
-                  console.log('Updated booking date data:', bookingDateUpdateData[0]);
-                }
-              }
-            } else {
-              console.error('Booking date not found with ID:', editableFormData.booking_date_id);
-              alert('Booking date not found. The ID might be incorrect.');
-            }
-          } else {
-            console.warn('No booking date ID found, cannot update booking date status');
-          }
-
-          // Format dates for display
-          const startDate = new Date(editableFormData.start_date).toLocaleDateString();
-          const endDate = new Date(editableFormData.end_date).toLocaleDateString();
-          
-          // Clear error message and set success message
-          setErrorMessage('');
-          setSuccessMessage(`The property ${propertyId} has been booked from ${startDate} to ${endDate}`);
-          
-          // Don't call onConfirm or close modal - let user see the success message
-          // User can close manually by clicking Cancel button
-          // onConfirm(editableFormData);
-        }
+        // Show success message from backend
+        setSuccessMessage(result.message);
+        setErrorMessage('');
+        setLoading(false);
       } catch (error) {
         console.error('Error in property assignment:', error);
         alert('Error saving property assignment. Please try again.');
