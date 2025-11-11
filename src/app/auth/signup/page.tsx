@@ -45,8 +45,14 @@ export default function AdminSignupPage() {
       console.log('Starting admin signup with data:', data);
 
       // Call backend API for admin signup
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-      const response = await fetch(`${backendUrl}/api/admin-signup`, {
+      // Trim any whitespace to prevent URL issues
+      const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001').trim();
+      const apiUrl = `${backendUrl}/api/admin-signup`;
+      
+      console.log('Backend URL:', backendUrl);
+      console.log('Full API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -59,7 +65,11 @@ export default function AdminSignupPage() {
         }),
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
       const result = await response.json();
+      console.log('Response data:', result);
 
       if (!response.ok) {
         console.error('Backend signup error:', result);
