@@ -123,85 +123,23 @@ export class ApiService {
   // Properties API - fetch all properties with owner information
   async getAllProperties(): Promise<PropertyWithOwner[]> {
     try {
-      // Try to fetch from the correct table based on the actual schema
-      // The database might have either 'properties' or be using the complete_schema structure
-      let properties = [];
-
-      try {
-        // First try the original schema structure with landlord join
-        const { data, error: originalError } = await supabase
-          .from('properties')
-          .select(`
-            *,
-            landlord!landlord_id (
-              id,
-              full_name,
-              email,
-              role,
-              company_name,
-              company_email,
-              company_address,
-              contact_number,
-              phone,
-              created_at,
-              updated_at
-            )
-          `)
-          .order('created_at', { ascending: false });
-        
-        if (!originalError && data) {
-          properties = data;
-        } else {
-          throw originalError;
-        }
-      } catch {
-        console.log('Original schema failed, trying complete schema structure...');
-        
-        // Try the complete schema structure
-        const { data, error: completeError } = await supabase
-          .from('properties')
-          .select(`
-            *,
-            landlord!landlord_id (
-              id,
-              full_name,
-              email,
-              role,
-              company_name,
-              company_email,
-              company_address,
-              contact_number,
-              phone,
-              created_at,
-              updated_at
-            )
-          `)
-          .order('created_at', { ascending: false });
-        
-        if (completeError) {
-          throw completeError;
-        }
-        properties = data || [];
-      }
-
-      // Map properties with actual landlord data
-      const propertiesWithOwners = properties.map((property: Record<string, unknown>) => {
-        console.log('Property landlord data:', property.landlord);
-        return {
-          ...property,
-          owner: property.landlord || {
-            id: property.owner_id || property.landlord_id || 'unknown',
-            full_name: 'Property Owner',
-            email: 'owner@example.com',
-            role: 'landlord' as const,
-            created_at: property.created_at || new Date().toISOString(),
-            updated_at: property.updated_at || new Date().toISOString()
-          }
-        } as PropertyWithOwner;
+      // Call backend API to fetch properties (bypasses RLS)
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${backendUrl}/api/properties`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
 
-      console.log('Properties with owners:', propertiesWithOwners);
-      return propertiesWithOwners;
+      if (!response.ok) {
+        console.error('Failed to fetch properties from backend');
+        return [];
+      }
+
+      const result = await response.json();
+      console.log('Properties fetched from backend:', result.data?.length || 0);
+      return result.data || [];
     } catch (error) {
       console.error('Error in getAllProperties:', error);
       // Return empty array to prevent crashes
@@ -218,34 +156,33 @@ export class ApiService {
     completeBookings: number;
   }> {
     try {
-      // Get total properties count
-      const { count: totalProperties } = await supabase
-        .from('properties')
-        .select('*', { count: 'exact', head: true });
+      // Call backend API to fetch dashboard stats (bypasses RLS)
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${backendUrl}/api/properties/stats`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-      // Get available properties count
-      const { count: availableProperties } = await supabase
-        .from('properties')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_available', true);
+      if (!response.ok) {
+        console.error('Failed to fetch dashboard stats from backend');
+        return {
+          totalProperties: 0,
+          bookedProperties: 0,
+          activeBookings: 0,
+          pendingBookings: 0,
+          completeBookings: 0,
+        };
+      }
 
-      // Get booking statistics based on booking_dates status
-      const [
-        { count: pendingBookingDates },
-        { count: activeBookingsCount },
-        { count: confirmedBookingDates }
-      ] = await Promise.all([
-        supabase.from('booking_dates').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('booked_properties').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-        supabase.from('booking_dates').select('*', { count: 'exact', head: true }).eq('status', 'confirmed')
-      ]);
-
-      return {
-        totalProperties: totalProperties || 0,
-        bookedProperties: (totalProperties || 0) - (availableProperties || 0),
-        activeBookings: activeBookingsCount || 0,
-        pendingBookings: pendingBookingDates || 0,
-        completeBookings: confirmedBookingDates || 0,
+      const result = await response.json();
+      return result.data || {
+        totalProperties: 0,
+        bookedProperties: 0,
+        activeBookings: 0,
+        pendingBookings: 0,
+        completeBookings: 0,
       };
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
