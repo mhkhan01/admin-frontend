@@ -66,7 +66,7 @@ interface EditableFormData {
   property_address: string;
   landlord_name: string;
   landlord_contact: string;
-  value: number;
+  value: string | number;
 }
 
 export default function PropertyAssignmentModal({
@@ -557,7 +557,7 @@ export default function PropertyAssignmentModal({
             property_address: editableFormData.property_address,
             landlord_name: editableFormData.landlord_name,
             landlord_contact: editableFormData.landlord_contact,
-            value: editableFormData.value
+            value: typeof editableFormData.value === 'string' ? parseFloat(editableFormData.value) || 0 : editableFormData.value
           }),
         });
 
@@ -759,9 +759,9 @@ export default function PropertyAssignmentModal({
                     <div className="col-span-2">
                       <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Confirmed booking value</label>
                       <input
-                        type="number"
+                        type="text"
                         value={editableFormData.value}
-                        onChange={(e) => handleInputChange('value', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => handleInputChange('value', e.target.value)}
                         className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
                       />
                     </div>
