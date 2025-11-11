@@ -66,6 +66,7 @@ interface EditableFormData {
   property_address: string;
   landlord_name: string;
   landlord_contact: string;
+  value: number;
 }
 
 export default function PropertyAssignmentModal({
@@ -154,7 +155,7 @@ export default function PropertyAssignmentModal({
 
         console.log('New booking form data prepared:', formData);
         setFormData(formData);
-        setEditableFormData(formData);
+        setEditableFormData({ ...formData, value: 0 });
         setLoading(false);
         return;
       }
@@ -291,7 +292,7 @@ export default function PropertyAssignmentModal({
 
       console.log('Form data prepared:', formData);
       setFormData(formData);
-      setEditableFormData(formData);
+      setEditableFormData({ ...formData, value: 0 });
     } catch (error) {
       console.error('Error fetching form data:', error);
       // Set a fallback form data even if some queries fail
@@ -318,7 +319,7 @@ export default function PropertyAssignmentModal({
         landlord_contact: selectedProperty.owner?.contact_number || selectedProperty.owner?.email || 'Unknown'
       };
       setFormData(fallbackData);
-      setEditableFormData(fallbackData);
+      setEditableFormData({ ...fallbackData, value: 0 });
     } finally {
       setLoading(false);
     }
@@ -434,7 +435,8 @@ export default function PropertyAssignmentModal({
             selectedProperty.country
           ].filter(Boolean).join(', ') || '',
           landlord_name: landlord?.full_name || selectedProperty.owner?.full_name || 'Unknown',
-          landlord_contact: landlord?.contact_number || landlord?.email || selectedProperty.owner?.contact_number || selectedProperty.owner?.email || 'Unknown'
+          landlord_contact: landlord?.contact_number || landlord?.email || selectedProperty.owner?.contact_number || selectedProperty.owner?.email || 'Unknown',
+          value: editableFormData.value || 0
         });
       }
       
@@ -486,7 +488,8 @@ export default function PropertyAssignmentModal({
         property_type: selectedProperty?.property_type || '',
         property_address: selectedProperty?.full_address || selectedProperty?.address || '',
         landlord_name: editableFormData.landlord_name,
-        landlord_contact: editableFormData.landlord_contact
+        landlord_contact: editableFormData.landlord_contact,
+        value: editableFormData.value || 0
       });
       setErrorMessage(''); // Clear error message when field is empty
       setIsLoadingBookingData(false); // Clear loading state
@@ -553,7 +556,8 @@ export default function PropertyAssignmentModal({
             property_type: editableFormData.property_type,
             property_address: editableFormData.property_address,
             landlord_name: editableFormData.landlord_name,
-            landlord_contact: editableFormData.landlord_contact
+            landlord_contact: editableFormData.landlord_contact,
+            value: editableFormData.value
           }),
         });
 
@@ -748,6 +752,16 @@ export default function PropertyAssignmentModal({
                         type="text"
                         value={editableFormData.landlord_contact}
                         onChange={(e) => handleInputChange('landlord_contact', e.target.value)}
+                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
+                      />
+                    </div>
+                    
+                    <div className="col-span-2">
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Confirmed booking value</label>
+                      <input
+                        type="number"
+                        value={editableFormData.value}
+                        onChange={(e) => handleInputChange('value', parseFloat(e.target.value) || 0)}
                         className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
                       />
                     </div>
