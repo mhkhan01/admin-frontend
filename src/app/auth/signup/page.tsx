@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabase';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,6 +25,8 @@ export default function AdminSignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const router = useRouter();
 
   const {
@@ -43,171 +44,40 @@ export default function AdminSignupPage() {
     try {
       console.log('Starting admin signup with data:', data);
 
-      // FIRST: Check if email already exists in admin table (same role)
-      try {
-        const { data: existingAdmin, error: adminCheckError } = await supabase
-          .from('admin')
-          .select('id, email')
-          .eq('email', data.email)
-          .maybeSingle();
-
-        if (existingAdmin && !adminCheckError) {
-          setError('Email already in use');
-          setLoading(false);
-          return;
-        }
-      } catch (adminCheckError) {
-        console.log('Admin table check failed:', adminCheckError);
-        // Continue with signup even if check fails
-      }
-
-      // Check if email already exists in contractor or landlord tables (cross-table validation)
-      try {
-        const { data: existingContractor, error: contractorCheckError } = await supabase
-          .from('contractor')
-          .select('id, email')
-          .eq('email', data.email)
-          .maybeSingle();
-
-        if (existingContractor && !contractorCheckError) {
-          setError('This email is already in use. Try using a different email.');
-          setLoading(false);
-          return;
-        }
-      } catch (contractorCheckError) {
-        console.log('Contractor table check failed:', contractorCheckError);
-        // Continue with signup even if check fails
-      }
-
-      // Check if email exists in landlord table
-      try {
-        const { data: existingLandlord, error: landlordCheckError } = await supabase
-          .from('landlord')
-          .select('id, email')
-          .eq('email', data.email)
-          .maybeSingle();
-
-        if (existingLandlord && !landlordCheckError) {
-          setError('This email is already in use. Try using a different email.');
-          setLoading(false);
-          return;
-        }
-      } catch (landlordCheckError) {
-        console.log('Landlord table check failed:', landlordCheckError);
-        // Continue with signup even if check fails
-      }
-
-      // Sign up with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/login`,
-          data: {
-            role: 'admin',
-            full_name: data.fullName
-          }
-        }
+      // Call backend API for admin signup
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const response = await fetch(`${backendUrl}/api/admin-signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName: data.fullName,
+          email: data.email,
+          password: data.password,
+          confirmPassword: data.confirmPassword
+        }),
       });
 
-      console.log('Supabase Auth signup result:', { authData, authError });
+      const result = await response.json();
 
-      if (authError) {
-        console.error('Auth signup error:', authError);
-        
-        // Handle specific error types
-        if (authError.message.includes('User already registered')) {
-          setError('This email is already registered. Please try logging in instead.');
-        } else if (authError.message.includes('Invalid email')) {
-          setError('Please enter a valid email address.');
-        } else if (authError.message.includes('Password should be at least')) {
-          setError('Password must be at least 6 characters long.');
-        } else {
-          setError(`Signup failed: ${authError.message}`);
-        }
+      if (!response.ok) {
+        console.error('Backend signup error:', result);
+        setError(result.error || 'Signup failed. Please try again.');
         setLoading(false);
         return;
       }
 
-      if (authData.user) {
-        console.log('Admin user created successfully:', authData.user.id);
+      console.log('Admin signup successful:', result);
 
-        // Check if user was created in admin table (via trigger)
-        const { data: adminProfile, error: checkError } = await supabase
-          .from('admin')
-          .select('id, email, full_name')
-          .eq('id', authData.user.id)
-          .single();
+      // Show success message
+      setSuccess(true);
+      setLoading(false);
 
-        console.log('Admin profile check:', { adminProfile, checkError });
-
-        if (checkError && checkError.code !== 'PGRST116') {
-          console.error('Error checking admin profile:', checkError);
-        }
-
-        // If profile doesn't exist, create it manually (fallback)
-        if (!adminProfile) {
-          console.log('Creating admin profile manually...');
-          
-          // Build insert data object (exclude role if column doesn't exist yet)
-          const insertData: {
-            id: string;
-            email: string;
-            full_name: string;
-            is_active: boolean;
-            email_verified: boolean;
-          } = {
-            id: authData.user.id,
-            email: data.email,
-            full_name: data.fullName,
-            is_active: true,
-            email_verified: false
-          };
-
-          // Try to insert with role first
-          let result = await supabase
-            .from('admin')
-            .insert({
-              ...insertData,
-              role: 'admin'
-            })
-            .select();
-
-          // If it fails due to role/password column not existing, try without them
-          if (result.error && (result.error.message?.includes('role') || result.error.message?.includes('password'))) {
-            console.log('Role or password column not found, inserting without them...');
-            result = await supabase
-              .from('admin')
-              .insert(insertData)
-              .select();
-          }
-
-          console.log('Admin profile insert result:', { data: result.data, error: result.error });
-
-          if (result.error) {
-            console.error('Profile creation error:', result.error);
-            console.error('Error details:', {
-              message: result.error.message,
-              details: result.error.details,
-              hint: result.error.hint,
-              code: result.error.code
-            });
-            // Don't fail the signup if profile creation fails
-            // The user can still login, profile will be created later
-          } else {
-            console.log('Admin profile created successfully:', result.data);
-          }
-        }
-
-        // Show success message
-        setSuccess(true);
-        setLoading(false);
-
-        // Redirect to login with success message
-        setTimeout(() => {
-          router.push('/auth/login?message=Signed up successfully! Please check your email to confirm your account before signing in.');
-        }, 2000);
-      }
+      // Redirect to login with success message
+      setTimeout(() => {
+        router.push('/auth/login?message=Signed up successfully! Please check your email to confirm your account before signing in.');
+      }, 2000);
     } catch (err) {
       console.error('Unexpected error during signup:', err);
       setError('An unexpected error occurred. Please try again.');
@@ -226,21 +96,34 @@ export default function AdminSignupPage() {
       <div className="absolute inset-0 bg-[rgba(11,29,55,0.88)] pointer-events-none"></div>
 
       {/* Main content */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen py-4 px-2 sm:py-8 sm:px-4 pb-12 sm:pb-16">
-        {/* Logo */}
-        <div className="mb-4 sm:mb-8 w-full max-w-xs sm:max-w-2xl">
+      <div className="relative z-10 flex flex-col items-center justify-start min-h-screen px-2 sm:px-4 pb-12 sm:pb-16 -mt-4">
+        {/* Logo on Background */}
+        <div className="flex justify-center -mb-12 sm:-mb-16 lg:-mb-20">
           <Image
-            src="/Asset 3@4x.png"
-            alt="Booking Hub Logo"
-            width={800}
-            height={200}
-            className="w-full h-auto"
+            src="/white-teal.webp"
+            alt="Logo"
+            width={300}
+            height={300}
+            className="w-48 h-48 sm:w-64 sm:h-64 lg:w-80 lg:h-80 object-contain drop-shadow-2xl"
             priority
+            style={{
+              animation: 'flip 5s ease-in-out infinite'
+            }}
           />
+          <style jsx>{`
+            @keyframes flip {
+              0%, 60% {
+                transform: rotateY(0deg);
+              }
+              100% {
+                transform: rotateY(360deg);
+              }
+            }
+          `}</style>
         </div>
 
         {/* Form Container */}
-        <div className="bg-white/95 backdrop-blur-sm rounded-xl sm:rounded shadow-xl sm:shadow-lg p-6 sm:p-6 lg:p-8 w-full max-w-xs sm:max-w-lg lg:max-w-2xl border border-gray-200/50 sm:border-gray-200 mt-4 mb-4 sm:mt-0 sm:mb-0">
+        <div className="bg-white/95 backdrop-blur-sm rounded-xl sm:rounded shadow-xl sm:shadow-lg p-6 sm:p-6 lg:p-8 w-full max-w-xs sm:max-w-lg lg:max-w-2xl border border-gray-200/50 sm:border-gray-200">
           {/* Form Title */}
           <h1 className="text-base sm:text-2xl lg:text-3xl font-bold text-booking-dark mb-4 sm:mb-8 text-center leading-tight">
             Create Your Admin Account
@@ -300,13 +183,43 @@ export default function AdminSignupPage() {
               <label htmlFor="password" className="block text-xs sm:text-sm font-medium text-booking-dark mb-1 sm:mb-2">
                 Password
               </label>
-              <input
-                {...register('password')}
-                type="password"
-                autoComplete="new-password"
-                className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-booking-teal rounded focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent ${errors.password ? 'border-red-500' : ''}`}
-                placeholder="Create a password"
-              />
+              <div className="relative">
+                <input
+                  {...register('password')}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 text-sm sm:text-base border border-booking-teal rounded focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent ${errors.password ? 'border-red-500' : ''}`}
+                  placeholder="Create a password"
+                  style={{
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'textfield'
+                  }}
+                />
+                <style jsx>{`
+                  input[type="password"]::-ms-reveal,
+                  input[type="password"]::-ms-clear,
+                  input[type="text"]::-ms-reveal,
+                  input[type="text"]::-ms-clear {
+                    display: none;
+                  }
+                `}</style>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                >
+                  {showPassword ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
               {errors.password && (
                 <p className="mt-1 text-xs sm:text-sm text-red-600">{errors.password.message}</p>
               )}
@@ -316,13 +229,43 @@ export default function AdminSignupPage() {
               <label htmlFor="confirmPassword" className="block text-xs sm:text-sm font-medium text-booking-dark mb-1 sm:mb-2">
                 Confirm Password
               </label>
-              <input
-                {...register('confirmPassword')}
-                type="password"
-                autoComplete="new-password"
-                className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-booking-teal rounded focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent ${errors.confirmPassword ? 'border-red-500' : ''}`}
-                placeholder="Confirm your password"
-              />
+              <div className="relative">
+                <input
+                  {...register('confirmPassword')}
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 text-sm sm:text-base border border-booking-teal rounded focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent ${errors.confirmPassword ? 'border-red-500' : ''}`}
+                  placeholder="Confirm your password"
+                  style={{
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'textfield'
+                  }}
+                />
+                <style jsx>{`
+                  input[type="password"]::-ms-reveal,
+                  input[type="password"]::-ms-clear,
+                  input[type="text"]::-ms-reveal,
+                  input[type="text"]::-ms-clear {
+                    display: none;
+                  }
+                `}</style>
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                >
+                  {showConfirmPassword ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
               {errors.confirmPassword && (
                 <p className="mt-1 text-xs sm:text-sm text-red-600">{errors.confirmPassword.message}</p>
               )}

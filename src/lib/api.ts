@@ -229,25 +229,23 @@ export class ApiService {
         .select('*', { count: 'exact', head: true })
         .eq('is_available', true);
 
-      // Get booking request statistics
+      // Get booking statistics based on booking_dates status
       const [
-        ,
-        { count: pendingBookingRequests },
+        { count: pendingBookingDates },
         { count: activeBookingsCount },
-        { count: completedBookingRequests }
+        { count: confirmedBookingDates }
       ] = await Promise.all([
-        supabase.from('booking_requests').select('*', { count: 'exact', head: true }),
-        supabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('booking_dates').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('booked_properties').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-        supabase.from('booking_requests').select('*', { count: 'exact', head: true }).eq('status', 'completed')
+        supabase.from('booking_dates').select('*', { count: 'exact', head: true }).eq('status', 'confirmed')
       ]);
 
       return {
         totalProperties: totalProperties || 0,
         bookedProperties: (totalProperties || 0) - (availableProperties || 0),
         activeBookings: activeBookingsCount || 0,
-        pendingBookings: pendingBookingRequests || 0,
-        completeBookings: completedBookingRequests || 0,
+        pendingBookings: pendingBookingDates || 0,
+        completeBookings: confirmedBookingDates || 0,
       };
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);

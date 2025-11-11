@@ -61,7 +61,7 @@ interface Property {
   // Contact information
   relevant_contact?: string;
   
-  // Landlord information
+  // Partner information
   owner?: {
     id: string;
     full_name: string;
@@ -321,14 +321,14 @@ export default function PropertyDetailsModal({ isOpen, onClose, property }: Prop
           </div>
 
 
-          {/* Landlord Information */}
+          {/* Partner Information */}
           {property.owner && (
             <div>
-              <h3 className="text-[10px] sm:text-lg font-semibold text-booking-dark mb-1 sm:mb-4">Landlord Information</h3>
+              <h3 className="text-[10px] sm:text-lg font-semibold text-booking-dark mb-1 sm:mb-4">Partner Information</h3>
               <div className="p-1.5 sm:p-4 rounded-lg" style={{ backgroundColor: '#00BAB5' }}>
                 <div className="grid grid-cols-2 md:grid-cols-2 gap-1 sm:gap-6">
                   <div>
-                    <label className="block text-[8px] sm:text-sm font-medium mb-0.5 sm:mb-1" style={{ color: '#F6F6F4' }}>Landlord Name</label>
+                    <label className="block text-[8px] sm:text-sm font-medium mb-0.5 sm:mb-1" style={{ color: '#F6F6F4' }}>Partner Name</label>
                     <p className="text-[8px] sm:text-base font-medium" style={{ color: '#F6F6F4' }}>{property.owner.full_name}</p>
                   </div>
                   <div>
