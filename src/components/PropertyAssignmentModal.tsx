@@ -71,7 +71,8 @@ interface EditableFormData {
 export default function PropertyAssignmentModal({
   isOpen,
   onClose,
-  onConfirm,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onConfirm: _onConfirm,
   bookingToAssign,
   selectedProperty,
   isNewBooking = false
@@ -81,6 +82,7 @@ export default function PropertyAssignmentModal({
   const [editableFormData, setEditableFormData] = useState<EditableFormData | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [successMessage, setSuccessMessage] = useState<string>('');
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_isLoadingBookingData, setIsLoadingBookingData] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -325,6 +327,7 @@ export default function PropertyAssignmentModal({
   useEffect(() => {
     if (isOpen && bookingToAssign && selectedProperty) {
       setErrorMessage(''); // Clear any previous error messages
+      setSuccessMessage(''); // Clear any previous success messages
       fetchFormData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -595,22 +598,32 @@ export default function PropertyAssignmentModal({
           }
         }
 
-        // Get booking_request_id from booking_dates table and check status
+        // Get booking_request_id from booking_dates table and check if already booked
         let bookingRequestId = null;
         if (editableFormData.booking_date_id) {
+          // First, check if this booking already exists in booked_properties
+          const { data: existingBooking, error: existingBookingError } = await supabase
+            .from('booked_properties')
+            .select('id')
+            .eq('booking_id', editableFormData.booking_date_id)
+            .maybeSingle();
+          
+          if (!existingBookingError && existingBooking) {
+            // Booking already exists in booked_properties
+            setSuccessMessage('');
+            setErrorMessage('The booking is already active');
+            setLoading(false);
+            return;
+          }
+          
+          // Get booking_request_id from booking_dates
           const { data: bookingDateData, error: bookingDateError } = await supabase
             .from('booking_dates')
-            .select('booking_request_id, status')
+            .select('booking_request_id')
             .eq('id', editableFormData.booking_date_id)
             .single();
           
           if (!bookingDateError && bookingDateData) {
-            // Check if booking is already confirmed (only for new bookings)
-            if (isNewBooking && bookingDateData.status === 'confirmed') {
-              setErrorMessage('The booking is already active');
-              setLoading(false);
-              return;
-            }
             bookingRequestId = bookingDateData.booking_request_id;
           }
         }
@@ -665,11 +678,13 @@ export default function PropertyAssignmentModal({
         const overlapCheck = await checkDateOverlap(propertyId, editableFormData.start_date, editableFormData.end_date);
         
         if (overlapCheck.error) {
+          setSuccessMessage('');
           setErrorMessage(`Error validating dates: ${overlapCheck.error}`);
           return;
         }
         
         if (overlapCheck.hasOverlap) {
+          setSuccessMessage('');
           setErrorMessage(`Property is unavailable for the selected duration (${editableFormData.start_date} to ${editableFormData.end_date}). This property is already booked from ${overlapCheck.conflictingDates}. Please look for another property.`);
           return;
         }
@@ -950,9 +965,17 @@ export default function PropertyAssignmentModal({
             console.warn('No booking date ID found, cannot update booking date status');
           }
 
-          alert('Property assignment saved successfully!');
-          onConfirm(editableFormData);
-          onClose();
+          // Format dates for display
+          const startDate = new Date(editableFormData.start_date).toLocaleDateString();
+          const endDate = new Date(editableFormData.end_date).toLocaleDateString();
+          
+          // Clear error message and set success message
+          setErrorMessage('');
+          setSuccessMessage(`The property ${propertyId} has been booked from ${startDate} to ${endDate}`);
+          
+          // Don't call onConfirm or close modal - let user see the success message
+          // User can close manually by clicking Cancel button
+          // onConfirm(editableFormData);
         }
       } catch (error) {
         console.error('Error in property assignment:', error);
@@ -972,18 +995,17 @@ export default function PropertyAssignmentModal({
 
         <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
 
-        <div className="inline-block w-[85%] sm:w-full max-w-2xl max-h-[70vh] sm:max-h-none px-3 pt-3 pb-3 sm:px-4 sm:pt-5 sm:pb-4 overflow-y-auto text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle sm:p-6">
+        <div 
+          className="inline-block w-[85%] sm:w-full max-w-2xl max-h-[70vh] sm:max-h-none px-3 pt-3 pb-3 sm:px-4 sm:pt-5 sm:pb-4 overflow-y-auto text-left align-bottom transition-all transform bg-white rounded-lg shadow-xl sm:my-8 sm:align-middle sm:p-6"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="sm:flex sm:items-start">
             <div className="w-full mt-2 sm:mt-3 text-center sm:mt-0 sm:text-left">
               <h3 className="text-sm sm:text-lg font-medium leading-6 text-gray-900 mb-2 sm:mb-4">
                 Property Assignment Details
               </h3>
               
-              {loading ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-booking-teal"></div>
-                </div>
-              ) : editableFormData ? (
+              {editableFormData ? (
                 <form onSubmit={handleSubmit} className="space-y-2 sm:space-y-4">
                   <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 sm:gap-4">
                     <div>
@@ -1031,7 +1053,7 @@ export default function PropertyAssignmentModal({
                     </div>
                     
                     <div>
-                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Contractor Name</label>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Client Name</label>
                       <input
                         type="text"
                         value={editableFormData.contractor_name}
@@ -1041,7 +1063,7 @@ export default function PropertyAssignmentModal({
                     </div>
                     
                     <div>
-                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Contractor Email</label>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Client Email</label>
                       <input
                         type="email"
                         value={editableFormData.contractor_email}
@@ -1051,7 +1073,7 @@ export default function PropertyAssignmentModal({
                     </div>
                     
                     <div>
-                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Contractor Phone</label>
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Client Phone</label>
                       <input
                         type="tel"
                         value={editableFormData.contractor_phone}
@@ -1090,25 +1112,25 @@ export default function PropertyAssignmentModal({
                       />
                     </div>
                     
-                    <div className="col-span-2 sm:col-span-1">
+                    <div className="col-span-2">
                       <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Property Address</label>
                       <div className="relative">
                         <textarea
                           value={editableFormData.property_address}
                           onChange={(e) => handleInputChange('property_address', e.target.value)}
-                          rows={1}
-                          className="mt-0.5 sm:mt-1 block w-full px-2 pt-[0.4rem] pb-[0.85rem] sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal resize-none overflow-hidden"
+                          rows={2}
+                          className="mt-0.5 sm:mt-1 block w-full px-2 py-2 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal resize-none"
                           style={{ 
                             lineHeight: '1.5', 
-                            minHeight: '2.5rem',
+                            minHeight: '3.5rem',
                             display: 'block'
                           }}
                         />
                       </div>
                     </div>
                     
-                    <div className="sm:col-span-1">
-                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Landlord Name</label>
+                    <div className="col-span-1">
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Partner Name</label>
                       <input
                         type="text"
                         value={editableFormData.landlord_name}
@@ -1117,8 +1139,8 @@ export default function PropertyAssignmentModal({
                       />
                     </div>
                     
-                    <div className="sm:col-span-1">
-                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Landlord Contact</label>
+                    <div className="col-span-1">
+                      <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Partner Contact</label>
                       <input
                         type="text"
                         value={editableFormData.landlord_contact}
@@ -1144,6 +1166,22 @@ export default function PropertyAssignmentModal({
                     </div>
                   )}
                   
+                  {/* Success Message Display */}
+                  {successMessage && (
+                    <div className="mt-2 sm:mt-4 p-2 sm:p-3 bg-green-50 border border-green-200 rounded-md">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-2 sm:ml-3">
+                          <p className="text-[10px] sm:text-sm text-green-800">{successMessage}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="mt-3 sm:mt-6 flex justify-end space-x-2 sm:space-x-3">
                     <button
                       type="button"
@@ -1154,13 +1192,17 @@ export default function PropertyAssignmentModal({
                     </button>
                     <button
                       type="submit"
-                      disabled={loading}
+                      disabled={loading || !!successMessage}
                       className="px-3 py-1.5 sm:px-4 sm:py-2 text-[10px] sm:text-sm font-medium text-white bg-booking-teal border border-transparent rounded-md shadow-sm hover:bg-booking-teal/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-booking-teal disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {loading ? 'Saving...' : 'Confirm Assignment'}
                     </button>
                   </div>
                 </form>
+              ) : loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-booking-teal"></div>
+                </div>
               ) : (
                 <div className="text-center py-4 sm:py-8">
                   <p className="text-[10px] sm:text-sm text-gray-500">Failed to load form data</p>

@@ -20,6 +20,7 @@ function LoginPageContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -95,21 +96,34 @@ function LoginPageContent() {
       <div className="absolute inset-0 bg-[rgba(11,29,55,0.88)] pointer-events-none"></div>
 
       {/* Main content */}
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen py-4 px-2 sm:py-8 sm:px-4 pb-12 sm:pb-16">
-        {/* Logo */}
-        <div className="mb-4 sm:mb-8 w-full max-w-xs sm:max-w-2xl">
+      <div className="relative z-10 flex flex-col items-center justify-start min-h-screen px-2 sm:px-4 pb-12 sm:pb-16 -mt-4">
+        {/* Logo on Background */}
+        <div className="flex justify-center -mb-12 sm:-mb-16 lg:-mb-20">
           <Image
-            src="/Asset 3@4x.png"
-            alt="Booking Hub Logo"
-            width={800}
-            height={200}
-            className="w-full h-auto"
+            src="/white-teal.webp"
+            alt="Logo"
+            width={300}
+            height={300}
+            className="w-48 h-48 sm:w-64 sm:h-64 lg:w-80 lg:h-80 object-contain drop-shadow-2xl"
             priority
+            style={{
+              animation: 'flip 5s ease-in-out infinite'
+            }}
           />
+          <style jsx>{`
+            @keyframes flip {
+              0%, 60% {
+                transform: rotateY(0deg);
+              }
+              100% {
+                transform: rotateY(360deg);
+              }
+            }
+          `}</style>
         </div>
 
         {/* Form Container */}
-        <div className="bg-white/95 backdrop-blur-sm rounded-xl sm:rounded shadow-xl sm:shadow-lg p-6 sm:p-6 lg:p-8 w-full max-w-xs sm:max-w-lg lg:max-w-2xl border border-gray-200/50 sm:border-gray-200 mt-4 mb-4 sm:mt-0 sm:mb-0">
+        <div className="bg-white/95 backdrop-blur-sm rounded-xl sm:rounded shadow-xl sm:shadow-lg p-6 sm:p-6 lg:p-8 w-full max-w-xs sm:max-w-lg lg:max-w-2xl border border-gray-200/50 sm:border-gray-200">
           {/* Form Title */}
           <h1 className="text-base sm:text-2xl lg:text-3xl font-bold text-booking-dark mb-4 sm:mb-8 text-center leading-tight">
             Sign In to Admin Portal
@@ -148,13 +162,43 @@ function LoginPageContent() {
               <label htmlFor="password" className="block text-xs sm:text-sm font-medium text-booking-dark mb-1 sm:mb-2">
                 Password
               </label>
-              <input
-                {...register('password')}
-                type="password"
-                autoComplete="current-password"
-                className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-booking-teal rounded focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent ${errors.password ? 'border-red-500' : ''}`}
-                placeholder="Enter your password"
-              />
+              <div className="relative">
+                <input
+                  {...register('password')}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-3 pr-10 sm:pr-12 text-sm sm:text-base border border-booking-teal rounded focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent ${errors.password ? 'border-red-500' : ''}`}
+                  placeholder="Enter your password"
+                  style={{
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'textfield'
+                  }}
+                />
+                <style jsx>{`
+                  input[type="password"]::-ms-reveal,
+                  input[type="password"]::-ms-clear,
+                  input[type="text"]::-ms-reveal,
+                  input[type="text"]::-ms-clear {
+                    display: none;
+                  }
+                `}</style>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                >
+                  {showPassword ? (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
               {errors.password && (
                 <p className="mt-1 text-xs sm:text-sm text-red-600">{errors.password.message}</p>
               )}
