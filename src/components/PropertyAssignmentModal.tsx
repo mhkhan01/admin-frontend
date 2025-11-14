@@ -536,7 +536,7 @@ export default function PropertyAssignmentModal({
         }
 
         // Call backend API for property assignment
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+        const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
         const response = await fetch(`${backendUrl}/api/property-assignment`, {
           method: 'POST',
           headers: {
