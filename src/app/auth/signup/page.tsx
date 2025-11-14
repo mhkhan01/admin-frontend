@@ -46,8 +46,8 @@ export default function AdminSignupPage() {
 
       // Call backend API for admin signup
       // Trim any whitespace to prevent URL issues
-      const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001').trim();
-      const apiUrl = `${backendUrl}/api/admin-signup`;
+      const backendUrl = ('https://jfgm6v6pkw.us-east-1.awsapprunner.com').trim();
+      const apiUrl = `https://jfgm6v6pkw.us-east-1.awsapprunner.com/api/admin-signup`;
       
       console.log('Backend URL:', backendUrl);
       console.log('Full API URL:', apiUrl);

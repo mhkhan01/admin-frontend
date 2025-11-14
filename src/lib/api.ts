@@ -124,7 +124,7 @@ export class ApiService {
   async getAllProperties(): Promise<PropertyWithOwner[]> {
     try {
       // Call backend API to fetch properties (bypasses RLS)
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
       const response = await fetch(`${backendUrl}/api/properties`, {
         method: 'GET',
         headers: {
@@ -157,7 +157,7 @@ export class ApiService {
   }> {
     try {
       // Call backend API to fetch dashboard stats (bypasses RLS)
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
       const response = await fetch(`${backendUrl}/api/properties/stats`, {
         method: 'GET',
         headers: {
