@@ -367,35 +367,27 @@ export default function AdminDashboard() {
   const fetchPlatformUsers = async () => {
     setLoadingUsers(true);
     try {
-      // Fetch contractors
-      const { data: contractors, error: contractorError } = await supabase
-        .from('contractor')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (contractorError) {
-        console.error('Error fetching contractors:', contractorError);
+      // Fetch platform users from backend API (bypasses RLS)
+      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+      const response = await fetch(`${backendUrl}/api/platform-users`);
+      
+      if (!response.ok) {
+        console.error('Backend API error:', response.status, response.statusText);
+        setPlatformUsers([]);
+        return;
       }
 
-      // Fetch landlords
-      const { data: landlords, error: landlordError } = await supabase
-        .from('landlord')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (landlordError) {
-        console.error('Error fetching landlords:', landlordError);
+      const result = await response.json();
+      
+      if (result.success && result.users) {
+        console.log('Platform users fetched from backend:', result.counts);
+        setPlatformUsers(result.users);
+      } else {
+        console.error('Invalid response from backend:', result);
+        setPlatformUsers([]);
       }
-
-      // Combine contractors and landlords
-      const allUsers = [
-        ...(contractors || []).map(user => ({ ...user, userType: 'Contractor', tableName: 'contractor' })),
-        ...(landlords || []).map(user => ({ ...user, userType: 'Landlord', tableName: 'landlord' }))
-      ];
-
-      setPlatformUsers(allUsers);
     } catch (error) {
-      console.error('Error fetching platform users:', error);
+      console.error('Error fetching platform users from backend:', error);
       setPlatformUsers([]);
     } finally {
       setLoadingUsers(false);
