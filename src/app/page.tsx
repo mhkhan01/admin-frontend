@@ -295,49 +295,26 @@ export default function AdminDashboard() {
 
   const fetchBookedProperties = async () => {
     try {
-      const { data, error } = await supabase
-        .from('booked_properties')
-        .select(`
-          *,
-          properties:property_id (
-            id,
-            property_name,
-            house_address,
-            locality,
-            city,
-            county,
-            country,
-            postcode,
-            property_type,
-            bedrooms,
-            beds,
-            bathrooms
-          ),
-          contractor:contractor_id (
-            id,
-            full_name,
-            email,
-            phone
-          ),
-          booking_requests:booking_request_id (
-            id,
-            full_name,
-            company_name,
-            email,
-            phone,
-            city
-          )
-        `)
-        .order('created_at', { ascending: false });
+      // Call backend API to fetch booked properties (bypasses RLS)
+      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+      const response = await fetch(`${backendUrl}/api/admin-booked-properties`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (error) {
-        console.error('Error fetching booked properties:', error);
+      if (!response.ok) {
+        console.error('Failed to fetch booked properties from backend');
         setBookedProperties([]);
-      } else {
-        setBookedProperties(data || []);
+        return;
       }
+
+      const result = await response.json();
+      console.log('Booked properties fetched from backend:', result.bookedProperties?.length || 0);
+      setBookedProperties(result.bookedProperties || []);
     } catch (error) {
-      console.error('Error fetching booked properties:', error);
+      console.error('Error fetching booked properties from backend:', error);
       setBookedProperties([]);
     }
   };
@@ -345,19 +322,27 @@ export default function AdminDashboard() {
   const fetchAdminUsers = async () => {
     setLoadingUsers(true);
     try {
-      const { data, error } = await supabase
-        .from('admin')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching admin users:', error);
+      // Fetch admin users from backend API (bypasses RLS)
+      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+      const response = await fetch(`${backendUrl}/api/admin-users`);
+      
+      if (!response.ok) {
+        console.error('Backend API error:', response.status, response.statusText);
         setAdminUsers([]);
+        return;
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.users) {
+        console.log('Admin users fetched from backend:', result.users.length);
+        setAdminUsers(result.users);
       } else {
-        setAdminUsers(data || []);
+        console.error('Invalid response from backend:', result);
+        setAdminUsers([]);
       }
     } catch (error) {
-      console.error('Error fetching admin users:', error);
+      console.error('Error fetching admin users from backend:', error);
       setAdminUsers([]);
     } finally {
       setLoadingUsers(false);
@@ -408,14 +393,21 @@ export default function AdminDashboard() {
     }
 
     try {
-      const { error } = await supabase
-        .from(tableName)
-        .update({ is_active: true })
-        .eq('id', userId);
+      // Call backend API to activate user (bypasses RLS)
+      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+      const response = await fetch(`${backendUrl}/api/admin-users/activate`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, tableName }),
+      });
 
-      if (error) {
-        console.error('Error activating user:', error);
-        alert(`Failed to activate user: ${error.message}`);
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        console.error('Error activating user:', result);
+        alert(`Failed to activate user: ${result.error || 'Unknown error'}`);
       } else {
         console.log(`User ${userName} activated successfully`);
         alert(`${userName} has been activated successfully.`);
@@ -442,14 +434,21 @@ export default function AdminDashboard() {
     }
 
     try {
-      const { error } = await supabase
-        .from(tableName)
-        .update({ is_active: false })
-        .eq('id', userId);
+      // Call backend API to deactivate user (bypasses RLS)
+      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+      const response = await fetch(`${backendUrl}/api/admin-users/deactivate`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId, tableName }),
+      });
 
-      if (error) {
-        console.error('Error deactivating user:', error);
-        alert(`Failed to deactivate user: ${error.message}`);
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        console.error('Error deactivating user:', result);
+        alert(`Failed to deactivate user: ${result.error || 'Unknown error'}`);
       } else {
         console.log(`User ${userName} deactivated successfully`);
         alert(`${userName} has been deactivated successfully.`);
@@ -481,14 +480,20 @@ export default function AdminDashboard() {
     }
 
     try {
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('id', userId);
+      // Call backend API to delete user (bypasses RLS)
+      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+      const response = await fetch(`${backendUrl}/api/admin-users/${tableName}/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-      if (error) {
-        console.error('Error deleting user:', error);
-        alert(`Failed to delete user: ${error.message}`);
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        console.error('Error deleting user:', result);
+        alert(`Failed to delete user: ${result.error || 'Unknown error'}`);
       } else {
         console.log(`User ${userName} deleted successfully`);
         alert(`${userName} has been deleted successfully.`);
