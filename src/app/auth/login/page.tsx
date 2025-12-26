@@ -73,6 +73,51 @@ function LoginPageContent() {
         // Wait a moment for auth state to update
         await new Promise(resolve => setTimeout(resolve, 500));
 
+        // Check if email exists in admin table via backend
+        const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+        let checkResult;
+        
+        try {
+          const checkResponse = await fetch(`${backendUrl}/api/admin-login-check`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email: data.email }),
+          });
+
+          // Check if the response is ok (status 200-299)
+          if (!checkResponse.ok) {
+            console.error('Backend API error:', checkResponse.status, checkResponse.statusText);
+            // If backend endpoint doesn't exist (404), deny access for security
+            console.log('Backend endpoint not available, denying access');
+            await supabase.auth.signOut();
+            setError('You can not access the admin dashboard.');
+            setLoading(false);
+            return;
+          }
+
+          checkResult = await checkResponse.json();
+          console.log('Admin table check result:', checkResult);
+        } catch (fetchError) {
+          console.error('Error calling admin login check API:', fetchError);
+          // If API call fails, deny access for security
+          await supabase.auth.signOut();
+          setError('You can not access the admin dashboard.');
+          setLoading(false);
+          return;
+        }
+
+        // If email doesn't exist in admin table, deny access
+        if (!checkResult || !checkResult.success || !checkResult.isAdmin) {
+          console.log('Email not found in admin table, signing out user');
+          // Sign out the user
+          await supabase.auth.signOut();
+          setError('You can not access the admin dashboard.');
+          setLoading(false);
+          return;
+        }
+
         console.log('Admin login successful, redirecting to dashboard...');
 
         // Redirect to admin dashboard
