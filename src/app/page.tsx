@@ -207,6 +207,61 @@ export default function AdminDashboard() {
   const [platformUsers, setPlatformUsers] = useState<PlatformUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
+    message: '',
+    type: 'success',
+    visible: false
+  });
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    confirmText: string;
+    confirmColor: 'green' | 'orange' | 'red';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    confirmText: 'Confirm',
+    confirmColor: 'green'
+  });
+
+  // Show toast notification
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type, visible: true });
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, visible: false }));
+    }, 4000);
+  };
+
+  // Show confirmation modal
+  const showConfirmModal = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    confirmText: string = 'Confirm',
+    confirmColor: 'green' | 'orange' | 'red' = 'green'
+  ) => {
+    setConfirmModal({
+      visible: true,
+      title,
+      message,
+      onConfirm,
+      confirmText,
+      confirmColor
+    });
+  };
+
+  // Close confirmation modal
+  const closeConfirmModal = () => {
+    setConfirmModal(prev => ({ ...prev, visible: false }));
+  };
+
   // Authentication check - redirect to login if not authenticated
   useEffect(() => {
     const checkAuth = async () => {
@@ -384,40 +439,47 @@ export default function AdminDashboard() {
     
     if (!tableName) {
       console.error('Table name is undefined!');
-      alert('Error: Unable to determine user type. Please refresh and try again.');
+      showToast('Error: Unable to determine user type. Please refresh and try again.', 'error');
       return;
     }
 
-    if (!confirm(`Are you sure you want to activate ${userName}?`)) {
-      return;
-    }
+    const performActivation = async () => {
+      closeConfirmModal();
+      try {
+        // Call backend API to activate user (bypasses RLS)
+        const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+        const response = await fetch(`${backendUrl}/api/admin-users/activate`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId, tableName }),
+        });
 
-    try {
-      // Call backend API to activate user (bypasses RLS)
-      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
-      const response = await fetch(`${backendUrl}/api/admin-users/activate`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId, tableName }),
-      });
+        const result = await response.json();
 
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        console.error('Error activating user:', result);
-        alert(`Failed to activate user: ${result.error || 'Unknown error'}`);
-      } else {
-        console.log(`User ${userName} activated successfully`);
-        alert(`${userName} has been activated successfully.`);
-        // Refresh the platform users list
-        fetchPlatformUsers();
+        if (!response.ok || !result.success) {
+          console.error('Error activating user:', result);
+          showToast(`Failed to activate user: ${result.error || 'Unknown error'}`, 'error');
+        } else {
+          console.log(`User ${userName} activated successfully`);
+          showToast(`${userName} has been activated successfully.`, 'success');
+          // Refresh the platform users list
+          fetchPlatformUsers();
+        }
+      } catch (error) {
+        console.error('Error activating user:', error);
+        showToast('An unexpected error occurred while activating the user.', 'error');
       }
-    } catch (error) {
-      console.error('Error activating user:', error);
-      alert('An unexpected error occurred while activating the user.');
-    }
+    };
+
+    showConfirmModal(
+      'Activate User',
+      `Are you sure you want to activate ${userName}?`,
+      performActivation,
+      'Activate',
+      'green'
+    );
   };
 
   const handleDeactivateUser = async (userId: string, tableName: string, userName: string) => {
@@ -425,40 +487,47 @@ export default function AdminDashboard() {
     
     if (!tableName) {
       console.error('Table name is undefined!');
-      alert('Error: Unable to determine user type. Please refresh and try again.');
+      showToast('Error: Unable to determine user type. Please refresh and try again.', 'error');
       return;
     }
 
-    if (!confirm(`Are you sure you want to deactivate ${userName}? They will not be able to access their account.`)) {
-      return;
-    }
+    const performDeactivation = async () => {
+      closeConfirmModal();
+      try {
+        // Call backend API to deactivate user (bypasses RLS)
+        const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+        const response = await fetch(`${backendUrl}/api/admin-users/deactivate`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId, tableName }),
+        });
 
-    try {
-      // Call backend API to deactivate user (bypasses RLS)
-      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
-      const response = await fetch(`${backendUrl}/api/admin-users/deactivate`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId, tableName }),
-      });
+        const result = await response.json();
 
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        console.error('Error deactivating user:', result);
-        alert(`Failed to deactivate user: ${result.error || 'Unknown error'}`);
-      } else {
-        console.log(`User ${userName} deactivated successfully`);
-        alert(`${userName} has been deactivated successfully.`);
-        // Refresh the platform users list
-        fetchPlatformUsers();
+        if (!response.ok || !result.success) {
+          console.error('Error deactivating user:', result);
+          showToast(`Failed to deactivate user: ${result.error || 'Unknown error'}`, 'error');
+        } else {
+          console.log(`User ${userName} deactivated successfully`);
+          showToast(`${userName} has been deactivated successfully.`, 'success');
+          // Refresh the platform users list
+          fetchPlatformUsers();
+        }
+      } catch (error) {
+        console.error('Error deactivating user:', error);
+        showToast('An unexpected error occurred while deactivating the user.', 'error');
       }
-    } catch (error) {
-      console.error('Error deactivating user:', error);
-      alert('An unexpected error occurred while deactivating the user.');
-    }
+    };
+
+    showConfirmModal(
+      'Deactivate User',
+      `Are you sure you want to deactivate ${userName}? They will not be able to access their account.`,
+      performDeactivation,
+      'Deactivate',
+      'orange'
+    );
   };
 
   const handleDeleteUser = async (userId: string, tableName: string, userName: string) => {
@@ -2031,6 +2100,93 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-booking-bg flex flex-col lg:flex-row">
+      {/* Toast Notification */}
+      {toast.visible && (
+        <div className="fixed top-4 right-4 z-[100] animate-slide-in">
+          <div
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg ${
+              toast.type === 'success'
+                ? 'bg-green-50 border border-green-200 text-green-800'
+                : 'bg-red-50 border border-red-200 text-red-800'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            )}
+            <span className="text-sm font-medium">{toast.message}</span>
+            <button
+              onClick={() => setToast(prev => ({ ...prev, visible: false }))}
+              className="ml-2 text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {confirmModal.visible && (
+        <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 animate-scale-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div
+                className={`p-2 rounded-full ${
+                  confirmModal.confirmColor === 'green'
+                    ? 'bg-green-100'
+                    : confirmModal.confirmColor === 'orange'
+                    ? 'bg-orange-100'
+                    : 'bg-red-100'
+                }`}
+              >
+                {confirmModal.confirmColor === 'green' ? (
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : confirmModal.confirmColor === 'orange' ? (
+                  <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                )}
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">{confirmModal.title}</h3>
+            </div>
+            <p className="text-gray-600 mb-6">{confirmModal.message}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={closeConfirmModal}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
+                  confirmModal.confirmColor === 'green'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : confirmModal.confirmColor === 'orange'
+                    ? 'bg-orange-600 hover:bg-orange-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {confirmModal.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Header */}
       <div className="lg:hidden text-white p-4 flex items-center justify-between" style={{ backgroundColor: '#0B1D37' }}>
         <div className="flex items-center space-x-3">
