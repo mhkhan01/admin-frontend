@@ -500,9 +500,9 @@ export default function AdminDashboard() {
         return;
       }
 
-      // Fetch real data from Supabase (properties now requires auth)
+      // Fetch real data from Supabase (stats and properties now require auth)
       const [statsData, propertiesData, bookingsData] = await Promise.all([
-        apiService.getDashboardStats(),
+        apiService.getDashboardStats(sessionData.session.access_token),
         apiService.getAllProperties(sessionData.session.access_token),
         apiService.getAllBookings()
       ]);

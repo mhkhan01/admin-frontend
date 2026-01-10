@@ -146,8 +146,8 @@ export class ApiService {
     }
   }
 
-  // Get dashboard statistics
-  async getDashboardStats(): Promise<{
+  // Get dashboard statistics (requires admin auth)
+  async getDashboardStats(accessToken: string): Promise<{
     totalProperties: number;
     bookedProperties: number;
     activeBookings: number;
@@ -155,17 +155,18 @@ export class ApiService {
     completeBookings: number;
   }> {
     try {
-      // Call backend API to fetch dashboard stats (bypasses RLS)
+      // Call backend API to fetch dashboard stats (requires authentication)
       const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
       const response = await fetch(`${backendUrl}/api/properties/stats`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
       if (!response.ok) {
-        console.error('Failed to fetch dashboard stats from backend');
+        console.error('Failed to fetch dashboard stats from backend:', response.status, response.statusText);
         return {
           totalProperties: 0,
           bookedProperties: 0,
