@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiService, PropertyWithOwner, Booking, formatFullAddress } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
@@ -126,6 +126,144 @@ interface BookedProperty {
   };
 }
 
+// Memoized Property Tile Component for optimized rendering
+// Uses content-visibility: auto for scroll performance
+interface PropertyTileProps {
+  property: PropertyWithOwner;
+  isPropertySelectionMode: boolean;
+  selectedPropertyForAssignment: PropertyWithOwner | null;
+  onPropertyClick: (property: PropertyWithOwner) => void;
+  onPropertySelect: (property: PropertyWithOwner) => void;
+}
+
+const PropertyTile = memo(function PropertyTile({
+  property,
+  isPropertySelectionMode,
+  selectedPropertyForAssignment,
+  onPropertyClick,
+  onPropertySelect,
+}: PropertyTileProps) {
+  return (
+    <div 
+      className={`bg-white rounded-lg sm:rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300 ${
+        isPropertySelectionMode ? 'cursor-default' : 'cursor-pointer'
+      } ${selectedPropertyForAssignment?.id === property.id ? 'ring-2 ring-booking-teal' : ''}`}
+      style={{
+        transform: 'translateZ(0)', // GPU acceleration for smooth scrolling
+        backfaceVisibility: 'hidden', // Prevents flickering during scroll
+        willChange: 'transform', // Hints browser to optimize for scroll
+      }}
+      onClick={() => {
+        if (isPropertySelectionMode) {
+          onPropertySelect(property);
+        } else {
+          onPropertyClick(property);
+        }
+      }}
+    >
+      {/* Property Image */}
+      <div className="relative h-16 sm:h-48 w-[calc(100%-0.5rem)] sm:w-full p-0.5 sm:p-3 mx-1 mt-1 sm:mx-0 sm:mt-0">
+        {property.photos && property.photos.length > 0 ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img 
+            src={property.photos[0]} 
+            alt={property.property_name || 'Property photo'}
+            loading="lazy"
+            className="w-full h-full object-cover rounded-md sm:rounded-lg"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
+              if (nextElement) {
+                nextElement.style.display = 'flex';
+              }
+            }}
+          />
+        ) : null}
+        <div className={`absolute inset-0.5 sm:inset-3 bg-gray-100 rounded-md sm:rounded-lg flex items-center justify-center ${property.photos && property.photos.length > 0 ? 'hidden' : 'flex'}`}>
+          <svg className="w-4 h-4 sm:w-12 sm:h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </div>
+        
+        {/* Radio Button for Selection Mode */}
+        {isPropertySelectionMode && (
+          <div className="absolute top-0.5 left-0.5 sm:top-6 sm:left-6">
+            <input
+              type="radio"
+              name="property-selection"
+              checked={selectedPropertyForAssignment?.id === property.id}
+              onChange={() => onPropertySelect(property)}
+              className="w-3 h-3 sm:w-8 sm:h-8 text-booking-teal focus:ring-booking-teal border-gray-300 cursor-pointer"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Property Details */}
+      <div className="p-1 sm:p-4 mx-1 mb-1 sm:mx-0 sm:mb-0">
+        <h3 className="text-[10px] sm:text-lg font-semibold text-booking-dark mb-0.5 sm:mb-2 line-clamp-2">
+          {property.property_name}
+        </h3>
+        
+        <div className="text-[8px] sm:text-sm text-blue-600 font-medium mb-0.5 sm:mb-2">
+          Property ID: {property.id}
+        </div>
+        
+        <p className="text-[8px] sm:text-sm text-booking-gray mb-0.5 sm:mb-3 line-clamp-2">
+          {formatFullAddress(property)}
+        </p>
+
+        <div className="flex items-center justify-between mb-0.5 sm:mb-3">
+          <span className="text-[8px] sm:text-sm text-booking-gray capitalize">
+            {property.property_type}
+          </span>
+        </div>
+
+        {/* Property Details - Beds, Bedrooms, Bathrooms */}
+        <div className="flex items-center justify-between space-x-0.5 sm:space-x-4 mb-0.5 sm:mb-1">
+          <div className="text-center flex-1">
+            <div className="text-[8px] sm:text-sm font-semibold text-booking-dark">{property.beds || 0}</div>
+            <div className="text-[7px] sm:text-xs text-booking-gray">Beds</div>
+          </div>
+          <div className="text-center flex-1">
+            <div className="text-[8px] sm:text-sm font-semibold text-booking-dark">{property.bedrooms || 0}</div>
+            <div className="text-[7px] sm:text-xs text-booking-gray">Bedrooms</div>
+          </div>
+          <div className="text-center flex-1">
+            <div className="text-[8px] sm:text-sm font-semibold text-booking-dark">{property.bathrooms || 0}</div>
+            <div className="text-[7px] sm:text-xs text-booking-gray">Bathrooms</div>
+          </div>
+        </div>
+
+        {/* Pricing */}
+        <div className="mt-0.5 sm:mt-2 mb-0.5 sm:mb-3">
+          {property.weekly_rate && (
+            <div className="text-[8px] sm:text-sm text-booking-gray">
+              <span className="font-medium">Weekly:</span> £{property.weekly_rate}
+            </div>
+          )}
+          {property.monthly_rate && (
+            <div className="text-[8px] sm:text-sm text-booking-gray">
+              <span className="font-medium">Monthly:</span> £{property.monthly_rate}
+            </div>
+          )}
+        </div>
+
+        {/* Property Contact Information */}
+        {property.relevant_contact && (
+          <div className="border-t border-gray-200 pt-0.5 sm:pt-2 mt-0.5 sm:mt-3">
+            <div className="space-y-0.5 sm:space-y-1">
+              <p className="text-[7px] sm:text-xs text-booking-gray">
+                <span className="font-medium">Contact:</span> {property.relevant_contact}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
 export default function AdminDashboard() {
   const router = useRouter();
   
@@ -206,6 +344,10 @@ export default function AdminDashboard() {
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [platformUsers, setPlatformUsers] = useState<PlatformUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Properties pagination state (infinite scroll - 2 rows of 4 = 8 properties at a time)
+  const [visiblePropertiesCount, setVisiblePropertiesCount] = useState(8);
+  const propertiesEndRef = useRef<HTMLDivElement>(null);
 
   // Toast notification state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error'; visible: boolean }>({
@@ -317,6 +459,33 @@ export default function AdminDashboard() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Reset visible properties count when filters change
+  useEffect(() => {
+    setVisiblePropertiesCount(8);
+  }, [filterValues, selectedFilters]);
+
+  // Intersection observer for infinite scroll in All Properties
+  const loadMoreProperties = useCallback(() => {
+    setVisiblePropertiesCount(prev => prev + 8);
+  }, []);
+
+  useEffect(() => {
+    const sentinel = propertiesEndRef.current;
+    if (!sentinel || activeTab !== 'properties') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreProperties();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [activeTab, loadMoreProperties]);
 
 
   const fetchDashboardData = async () => {
@@ -619,8 +788,8 @@ export default function AdminDashboard() {
     setIsPropertyDetailsModalOpen(true);
   };
 
-  // Filter properties based on selected filters
-  const getFilteredProperties = () => {
+  // Memoized filtered properties - only recalculates when dependencies change
+  const filteredProperties = useMemo(() => {
     let filtered = [...properties];
 
     // Search filter
@@ -722,7 +891,7 @@ export default function AdminDashboard() {
 
 
     return filtered;
-  };
+  }, [properties, selectedFilters, filterValues]);
 
   // Filter bookings based on selected filters
   const getFilteredBookings = () => {
@@ -1751,124 +1920,31 @@ export default function AdminDashboard() {
               </div>
             </div>
             
-            {getFilteredProperties().length > 0 ? (
+            {filteredProperties.length > 0 ? (
+              <>
               <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-6">
-                {getFilteredProperties().map((property) => (
-                  <div 
-                    key={property.id} 
-                    className={`bg-white rounded-lg sm:rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow duration-300 ${
-                      isPropertySelectionMode ? 'cursor-default' : 'cursor-pointer'
-                    } ${selectedPropertyForAssignment?.id === property.id ? 'ring-2 ring-booking-teal' : ''}`}
-                    onClick={() => {
-                      if (isPropertySelectionMode) {
-                        setSelectedPropertyForAssignment(property);
-                      } else {
-                        handlePropertyClick(property);
-                      }
-                    }}
-                  >
-                    {/* Property Image */}
-                    <div className="relative h-16 sm:h-48 w-[calc(100%-0.5rem)] sm:w-full p-0.5 sm:p-3 mx-1 mt-1 sm:mx-0 sm:mt-0">
-                      {property.photos && property.photos.length > 0 ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img 
-                          src={property.photos[0]} 
-                          alt={property.property_name || 'Property photo'}
-                          className="w-full h-full object-cover rounded-md sm:rounded-lg"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                            const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
-                            if (nextElement) {
-                              nextElement.style.display = 'flex';
-                            }
-                          }}
-                        />
-                      ) : null}
-                      <div className={`absolute inset-0.5 sm:inset-3 bg-gray-100 rounded-md sm:rounded-lg flex items-center justify-center ${property.photos && property.photos.length > 0 ? 'hidden' : 'flex'}`}>
-                        <svg className="w-4 h-4 sm:w-12 sm:h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      
-                      
-                      {/* Radio Button for Selection Mode */}
-                      {isPropertySelectionMode && (
-                        <div className="absolute top-0.5 left-0.5 sm:top-6 sm:left-6">
-                          <input
-                            type="radio"
-                            name="property-selection"
-                            checked={selectedPropertyForAssignment?.id === property.id}
-                            onChange={() => setSelectedPropertyForAssignment(property)}
-                            className="w-3 h-3 sm:w-8 sm:h-8 text-booking-teal focus:ring-booking-teal border-gray-300 cursor-pointer"
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Property Details */}
-                    <div className="p-1 sm:p-4 mx-1 mb-1 sm:mx-0 sm:mb-0">
-                      <h3 className="text-[10px] sm:text-lg font-semibold text-booking-dark mb-0.5 sm:mb-2 line-clamp-2">
-                        {property.property_name}
-                      </h3>
-                      
-                      <div className="text-[8px] sm:text-sm text-blue-600 font-medium mb-0.5 sm:mb-2">
-                        Property ID: {property.id}
-                      </div>
-                      
-                      <p className="text-[8px] sm:text-sm text-booking-gray mb-0.5 sm:mb-3 line-clamp-2">
-                        {formatFullAddress(property)}
-                      </p>
-
-                      <div className="flex items-center justify-between mb-0.5 sm:mb-3">
-                        <span className="text-[8px] sm:text-sm text-booking-gray capitalize">
-                          {property.property_type}
-                        </span>
-                      </div>
-
-                      {/* Property Details - Beds, Bedrooms, Bathrooms */}
-                      <div className="flex items-center justify-between space-x-0.5 sm:space-x-4 mb-0.5 sm:mb-1">
-                        <div className="text-center flex-1">
-                          <div className="text-[8px] sm:text-sm font-semibold text-booking-dark">{property.beds || 0}</div>
-                          <div className="text-[7px] sm:text-xs text-booking-gray">Beds</div>
-                        </div>
-                        <div className="text-center flex-1">
-                          <div className="text-[8px] sm:text-sm font-semibold text-booking-dark">{property.bedrooms || 0}</div>
-                          <div className="text-[7px] sm:text-xs text-booking-gray">Bedrooms</div>
-                        </div>
-                        <div className="text-center flex-1">
-                          <div className="text-[8px] sm:text-sm font-semibold text-booking-dark">{property.bathrooms || 0}</div>
-                          <div className="text-[7px] sm:text-xs text-booking-gray">Bathrooms</div>
-                        </div>
-                      </div>
-
-                      {/* Pricing */}
-                      <div className="mt-0.5 sm:mt-2 mb-0.5 sm:mb-3">
-                        {property.weekly_rate && (
-                          <div className="text-[8px] sm:text-sm text-booking-gray">
-                            <span className="font-medium">Weekly:</span> £{property.weekly_rate}
-                          </div>
-                        )}
-                        {property.monthly_rate && (
-                        <div className="text-[8px] sm:text-sm text-booking-gray">
-                            <span className="font-medium">Monthly:</span> £{property.monthly_rate}
-                        </div>
-                        )}
-                      </div>
-
-                      {/* Property Contact Information */}
-                      {property.relevant_contact && (
-                        <div className="border-t border-gray-200 pt-0.5 sm:pt-2 mt-0.5 sm:mt-3">
-                        <div className="space-y-0.5 sm:space-y-1">
-                            <p className="text-[7px] sm:text-xs text-booking-gray">
-                              <span className="font-medium">Contact:</span> {property.relevant_contact}
-                          </p>
-                        </div>
-                      </div>
-                      )}
-                    </div>
-                  </div>
+                {filteredProperties.slice(0, visiblePropertiesCount).map((property) => (
+                  <PropertyTile
+                    key={property.id}
+                    property={property}
+                    isPropertySelectionMode={isPropertySelectionMode}
+                    selectedPropertyForAssignment={selectedPropertyForAssignment}
+                    onPropertyClick={handlePropertyClick}
+                    onPropertySelect={setSelectedPropertyForAssignment}
+                  />
                 ))}
               </div>
+              {/* Sentinel element for infinite scroll - triggers loading more when visible */}
+              {visiblePropertiesCount < filteredProperties.length && (
+                <div 
+                  ref={propertiesEndRef} 
+                  className="flex justify-center items-center py-6"
+                >
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-booking-teal"></div>
+                  <span className="ml-2 text-sm text-booking-gray">Loading more properties...</span>
+                </div>
+              )}
+              </>
             ) : (
               <div className="bg-white rounded-lg sm:rounded-2xl shadow-lg border border-gray-100">
                 <div className="p-6 sm:p-12 text-center">
@@ -2369,8 +2445,8 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:flex w-64 bg-booking-dark text-white flex-col min-h-screen">
+      {/* Desktop Sidebar - Fixed position */}
+      <div className="hidden lg:flex w-64 bg-booking-dark text-white flex-col h-screen fixed top-0 left-0 overflow-y-auto z-40">
         {/* Logo/Header */}
         <div className="p-6 border-b border-gray-700" style={{ backgroundColor: '#0B1D37' }}>
           <div className="flex flex-col items-center space-y-2">
@@ -2496,8 +2572,8 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden">
+      {/* Main Content - offset by sidebar width on desktop */}
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-hidden lg:ml-64">
         {renderMainContent()}
       </div>
 
