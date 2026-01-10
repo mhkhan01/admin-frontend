@@ -118,20 +118,21 @@ export interface Booking {
 export class ApiService {
   constructor() {}
 
-  // Properties API - fetch all properties with owner information
-  async getAllProperties(): Promise<PropertyWithOwner[]> {
+  // Properties API - fetch all properties with owner information (requires admin auth)
+  async getAllProperties(accessToken: string): Promise<PropertyWithOwner[]> {
     try {
-      // Call backend API to fetch properties (bypasses RLS)
+      // Call backend API to fetch properties (requires authentication)
       const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
       const response = await fetch(`${backendUrl}/api/properties`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
         },
       });
 
       if (!response.ok) {
-        console.error('Failed to fetch properties from backend');
+        console.error('Failed to fetch properties from backend:', response.status, response.statusText);
         return [];
       }
 

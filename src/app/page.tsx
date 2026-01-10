@@ -490,10 +490,20 @@ export default function AdminDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch real data from Supabase
+      // Get auth session for authorization
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        console.error('No session found for fetchDashboardData');
+        setProperties([]);
+        setBookings([]);
+        return;
+      }
+
+      // Fetch real data from Supabase (properties now requires auth)
       const [statsData, propertiesData, bookingsData] = await Promise.all([
         apiService.getDashboardStats(),
-        apiService.getAllProperties(),
+        apiService.getAllProperties(sessionData.session.access_token),
         apiService.getAllBookings()
       ]);
 
