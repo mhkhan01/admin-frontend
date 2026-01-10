@@ -377,9 +377,24 @@ export default function AdminDashboard() {
   const fetchAdminUsers = async () => {
     setLoadingUsers(true);
     try {
-      // Fetch admin users from backend API (bypasses RLS)
+      // Get auth session for authorization
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        console.error('No session found for fetchAdminUsers');
+        setAdminUsers([]);
+        return;
+      }
+
+      // Fetch admin users from backend API with authentication
       const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
-      const response = await fetch(`${backendUrl}/api/admin-users`);
+      const response = await fetch(`${backendUrl}/api/admin-users`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+      });
       
       if (!response.ok) {
         console.error('Backend API error:', response.status, response.statusText);
