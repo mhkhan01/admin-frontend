@@ -535,12 +535,23 @@ export default function PropertyAssignmentModal({
           return;
         }
 
+        // Get auth session for authorization
+        const { data: sessionData } = await supabase.auth.getSession();
+        
+        if (!sessionData.session) {
+          console.error('No session found for property assignment');
+          setErrorMessage('Authentication error. Please log in again.');
+          setLoading(false);
+          return;
+        }
+
         // Call backend API for property assignment
         const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
         const response = await fetch(`${backendUrl}/api/property-assignment`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
           },
           body: JSON.stringify({
             booking_date_id: editableFormData.booking_date_id,
