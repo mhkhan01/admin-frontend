@@ -663,12 +663,22 @@ export default function AdminDashboard() {
     const performActivation = async () => {
       closeConfirmModal();
       try {
+        // Get auth session for authorization
+        const { data: sessionData } = await supabase.auth.getSession();
+        
+        if (!sessionData.session) {
+          console.error('No session found for activating user');
+          showToast('Authentication error. Please log in again.', 'error');
+          return;
+        }
+
         // Call backend API to activate user (bypasses RLS)
         const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
         const response = await fetch(`${backendUrl}/api/admin-users/activate`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
           },
           body: JSON.stringify({ userId, tableName }),
         });
