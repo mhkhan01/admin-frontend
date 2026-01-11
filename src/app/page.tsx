@@ -786,12 +786,22 @@ export default function AdminDashboard() {
     }
 
     try {
+      // Get auth session for authorization
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        console.error('No session found for deleting user');
+        alert('Authentication error. Please log in again.');
+        return;
+      }
+
       // Call backend API to delete user (bypasses RLS)
       const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
       const response = await fetch(`${backendUrl}/api/admin-users/${tableName}/${userId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
         },
       });
 
