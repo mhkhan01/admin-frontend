@@ -504,7 +504,7 @@ export default function AdminDashboard() {
       const [statsData, propertiesData, bookingsData] = await Promise.all([
         apiService.getDashboardStats(sessionData.session.access_token),
         apiService.getAllProperties(sessionData.session.access_token),
-        apiService.getAllBookings()
+        apiService.getAllBookings(sessionData.session.access_token)
       ]);
 
       setStats(statsData);
