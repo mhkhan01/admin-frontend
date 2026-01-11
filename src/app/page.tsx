@@ -529,17 +529,26 @@ export default function AdminDashboard() {
 
   const fetchBookedProperties = async () => {
     try {
-      // Call backend API to fetch booked properties (bypasses RLS)
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        console.error('No session found for fetchBookedProperties');
+        setBookedProperties([]);
+        return;
+      }
+
+      // Call backend API to fetch booked properties with authentication
       const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
       const response = await fetch(`${backendUrl}/api/admin-booked-properties`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
         },
       });
 
       if (!response.ok) {
-        console.error('Failed to fetch booked properties from backend');
+        console.error('Failed to fetch booked properties from backend:', response.status, response.statusText);
         setBookedProperties([]);
         return;
       }
