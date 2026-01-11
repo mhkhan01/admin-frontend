@@ -601,9 +601,23 @@ export default function AdminDashboard() {
   const fetchPlatformUsers = async () => {
     setLoadingUsers(true);
     try {
-      // Fetch platform users from backend API (bypasses RLS)
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        console.error('No session found for fetchPlatformUsers');
+        setPlatformUsers([]);
+        return;
+      }
+
+      // Fetch platform users from backend API with authentication
       const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
-      const response = await fetch(`${backendUrl}/api/platform-users`);
+      const response = await fetch(`${backendUrl}/api/platform-users`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`,
+        },
+      });
       
       if (!response.ok) {
         console.error('Backend API error:', response.status, response.statusText);
