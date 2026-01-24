@@ -95,6 +95,7 @@ interface BookedProperty {
   company_name?: string;
   property_name?: string;
   property_type?: string;
+  status?: 'active' | 'completed' | 'cancelled' | null;
   created_at: string;
   properties?: {
     id: string;
@@ -510,6 +511,26 @@ export default function AdminDashboard() {
       setStats(statsData);
       setProperties(propertiesData);
       setBookings(bookingsData);
+      
+      // Fetch booked properties to calculate accurate count for the tile
+      try {
+        const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+        const bookedPropertiesResponse = await fetch(`${backendUrl}/api/admin-booked-properties`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`,
+          },
+        });
+
+        if (bookedPropertiesResponse.ok) {
+          const bookedPropertiesResult = await bookedPropertiesResponse.json();
+          setBookedProperties(bookedPropertiesResult.bookedProperties || []);
+        }
+      } catch (error) {
+        console.error('Error fetching booked properties in fetchDashboardData:', error);
+        // Don't set error state, just log it
+      }
     } catch (error) {
       console.error('Error fetching admin data:', error);
       // Fallback to empty data on error
@@ -1116,6 +1137,13 @@ export default function AdminDashboard() {
     return filtered;
   };
 
+  // Calculate count of booked properties with status "active" or null
+  const activeBookedPropertiesCount = useMemo(() => {
+    return bookedProperties.filter(property => 
+      property.status === 'active' || property.status === null || property.status === undefined
+    ).length;
+  }, [bookedProperties]);
+
   if (loadingData) {
     return (
       <div className="min-h-screen bg-booking-bg">
@@ -1198,13 +1226,13 @@ export default function AdminDashboard() {
                     </svg>
                   </div>
                 </div>
-                <div className="text-lg sm:text-2xl lg:text-3xl font-bold text-booking-dark mb-1 sm:mb-2">{stats.bookedProperties}</div>
+                <div className="text-lg sm:text-2xl lg:text-3xl font-bold text-booking-dark mb-1 sm:mb-2">{activeBookedPropertiesCount}</div>
                 <div className="text-[10px] sm:text-sm text-booking-gray mb-2 sm:mb-3 lg:mb-4">Currently occupied</div>
                 <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2 mb-2 sm:mb-3 lg:mb-4">
-                  <div className="bg-green-500 h-1.5 sm:h-2 rounded-full" style={{width: `${Math.min((stats.bookedProperties / stats.totalProperties) * 100, 100)}%`}}></div>
+                  <div className="bg-green-500 h-1.5 sm:h-2 rounded-full" style={{width: `${Math.min((activeBookedPropertiesCount / stats.totalProperties) * 100, 100)}%`}}></div>
                 </div>
                 <div className="flex flex-row items-center justify-between gap-1 sm:gap-0 text-[8px] sm:text-sm text-booking-gray">
-                  <span>Occupancy: {Math.round((stats.bookedProperties / stats.totalProperties) * 100)}%</span>
+                  <span>Occupancy: {Math.round((activeBookedPropertiesCount / stats.totalProperties) * 100)}%</span>
                   <span>+{Math.floor(Math.random() * 5)}% from last week</span>
                 </div>
               </div>
@@ -1260,10 +1288,10 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Complete Bookings */}
+              {/* Confirmed Bookings */}
               <div className="bg-white rounded-lg sm:rounded-2xl p-2 sm:p-4 lg:p-6 shadow-lg border border-gray-100">
                 <div className="flex items-center justify-between mb-1 sm:mb-3 lg:mb-4">
-                  <h3 className="text-[8px] sm:text-base lg:text-lg font-semibold text-booking-dark">Complete Bookings</h3>
+                  <h3 className="text-[8px] sm:text-base lg:text-lg font-semibold text-booking-dark">Confirmed Bookings</h3>
                   <div className="w-4 h-4 sm:w-6 sm:h-6 lg:w-8 lg:h-8 bg-green-100 rounded-full flex items-center justify-center">
                     <svg className="w-2 h-2 sm:w-3 sm:h-3 lg:w-4 lg:h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
