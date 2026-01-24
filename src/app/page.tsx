@@ -897,7 +897,7 @@ export default function AdminDashboard() {
     // Numeric filters
     if (selectedFilters.has('bedrooms') && filterValues.bedrooms) {
       filtered = filtered.filter(property => 
-        property.bedrooms >= parseInt(filterValues.bedrooms)
+        property.bedrooms === parseInt(filterValues.bedrooms)
       );
     }
 
@@ -1860,18 +1860,16 @@ export default function AdminDashboard() {
                   )}
 
                   {selectedFilters.has('bedrooms') && (
-                    <select
-                      value={filterValues.bedrooms}
-                      onChange={(e) => setFilterValues(prev => ({ ...prev, bedrooms: e.target.value }))}
-                      className="min-w-32 sm:min-w-56 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
-                    >
-                      <option value="">Select Minimum Bedrooms</option>
-                      <option value="1">1+ Bedrooms</option>
-                      <option value="2">2+ Bedrooms</option>
-                      <option value="3">3+ Bedrooms</option>
-                      <option value="4">4+ Bedrooms</option>
-                      <option value="5">5+ Bedrooms</option>
-                    </select>
+                    <div className="relative min-w-32 sm:min-w-48">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Enter number of bedrooms"
+                        value={filterValues.bedrooms}
+                        onChange={(e) => setFilterValues(prev => ({ ...prev, bedrooms: e.target.value }))}
+                        className="w-full px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
+                      />
+                    </div>
                   )}
 
                   {selectedFilters.has('beds') && (
