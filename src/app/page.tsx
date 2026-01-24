@@ -317,7 +317,7 @@ export default function AdminDashboard() {
   const [selectedBookingFilters, setSelectedBookingFilters] = useState<Set<string>>(new Set(['search']));
   const [bookingFilterValues, setBookingFilterValues] = useState({
     search: '',
-    contractor_code: '',
+    booking_code: '',
     property_id: '',
     city: '',
     start_date: '',
@@ -988,6 +988,42 @@ export default function AdminDashboard() {
     return Array.from(cityMap.values()).sort();
   }, [properties]);
 
+  // Combine uniqueCities from properties with UK_CITIES for comprehensive city list
+  const allCitiesForProperties = useMemo(() => {
+    const cityMap = new Map<string, string>();
+    // First add UK_CITIES
+    UK_CITIES.forEach(city => {
+      const normalizedKey = city.toLowerCase().trim();
+      cityMap.set(normalizedKey, city);
+    });
+    // Then add uniqueCities from properties (will override if same city exists)
+    uniqueCities.forEach(city => {
+      const normalizedKey = city.toLowerCase().trim();
+      if (!cityMap.has(normalizedKey)) {
+        cityMap.set(normalizedKey, city);
+      }
+    });
+    return Array.from(cityMap.values()).sort();
+  }, [uniqueCities]);
+
+  // Combine uniqueCities from properties with UK_CITIES for All Requests filter
+  const allCitiesForRequests = useMemo(() => {
+    const cityMap = new Map<string, string>();
+    // First add UK_CITIES
+    UK_CITIES.forEach(city => {
+      const normalizedKey = city.toLowerCase().trim();
+      cityMap.set(normalizedKey, city);
+    });
+    // Then add uniqueCities from properties (will override if same city exists)
+    uniqueCities.forEach(city => {
+      const normalizedKey = city.toLowerCase().trim();
+      if (!cityMap.has(normalizedKey)) {
+        cityMap.set(normalizedKey, city);
+      }
+    });
+    return Array.from(cityMap.values()).sort();
+  }, [uniqueCities]);
+
   // Filter bookings based on selected filters
   const getFilteredBookings = () => {
     let filtered = [...bookings];
@@ -1002,11 +1038,11 @@ export default function AdminDashboard() {
       );
     }
 
-    // Contractor code filter
-    if (selectedBookingFilters.has('contractor_code') && bookingFilterValues.contractor_code) {
-      const codeTerm = bookingFilterValues.contractor_code.toLowerCase();
+    // Booking code filter
+    if (selectedBookingFilters.has('booking_code') && bookingFilterValues.booking_code) {
+      const codeTerm = bookingFilterValues.booking_code.toLowerCase();
       filtered = filtered.filter(booking => 
-        booking.contractor?.code?.toLowerCase().includes(codeTerm)
+        booking.id?.toLowerCase().includes(codeTerm)
       );
     }
 
@@ -1495,7 +1531,7 @@ export default function AdminDashboard() {
                     </svg>
                     <span>
                       {selectedBookingFilters.size === 1 && selectedBookingFilters.has('search') ? 'Search All' :
-                       selectedBookingFilters.size === 1 && selectedBookingFilters.has('contractor_code') ? 'Contractor Code' :
+                       selectedBookingFilters.size === 1 && selectedBookingFilters.has('booking_code') ? 'Booking Code' :
                        selectedBookingFilters.size === 1 && selectedBookingFilters.has('property_id') ? 'Property ID' :
                        selectedBookingFilters.size === 1 && selectedBookingFilters.has('city') ? 'City' :
                        selectedBookingFilters.size === 1 && selectedBookingFilters.has('start_date') ? 'Start Date' :
@@ -1514,7 +1550,7 @@ export default function AdminDashboard() {
                     <div className="p-2 space-y-1">
                       {[
                         { value: 'search', label: 'Search All' },
-                        { value: 'contractor_code', label: 'Filter by Contractor Code' },
+                        { value: 'booking_code', label: 'Filter by Booking Code' },
                         { value: 'property_id', label: 'Filter by Property ID' },
                         { value: 'city', label: 'Filter by City' },
                         { value: 'start_date', label: 'Filter by Start Date' },
@@ -1563,13 +1599,13 @@ export default function AdminDashboard() {
                     </div>
                   )}
 
-                  {selectedBookingFilters.has('contractor_code') && (
+                  {selectedBookingFilters.has('booking_code') && (
                     <div className="relative min-w-32 sm:min-w-48">
                       <input
                         type="text"
-                        placeholder="Contractor code..."
-                        value={bookingFilterValues.contractor_code}
-                        onChange={(e) => setBookingFilterValues(prev => ({ ...prev, contractor_code: e.target.value }))}
+                        placeholder="Booking code (e.g., BK-69)..."
+                        value={bookingFilterValues.booking_code}
+                        onChange={(e) => setBookingFilterValues(prev => ({ ...prev, booking_code: e.target.value }))}
                         className="w-full px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
                       />
                     </div>
@@ -1595,7 +1631,7 @@ export default function AdminDashboard() {
                         className="w-full px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
                       >
                         <option value="">Select City</option>
-                        {UK_CITIES.map((city) => (
+                        {allCitiesForRequests.map((city) => (
                           <option key={city} value={city}>
                             {city}
                           </option>
@@ -1822,7 +1858,7 @@ export default function AdminDashboard() {
                       className="min-w-32 sm:min-w-52 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
                     >
                       <option value="">Select City</option>
-                      {uniqueCities.map((city) => (
+                      {allCitiesForProperties.map((city) => (
                         <option key={city} value={city}>
                           {city}
                         </option>
