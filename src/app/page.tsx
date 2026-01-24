@@ -890,7 +890,7 @@ export default function AdminDashboard() {
     // Parking type filter
     if (selectedFilters.has('parking_type') && filterValues.parking_type) {
       filtered = filtered.filter(property => 
-        property.parking_type === filterValues.parking_type
+        property.parking_type?.toLowerCase().trim() === filterValues.parking_type.toLowerCase().trim()
       );
     }
 
@@ -1852,10 +1852,10 @@ export default function AdminDashboard() {
                       className="min-w-32 sm:min-w-52 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
                     >
                       <option value="">Select Parking Type</option>
-                      <option value="on-street">On Street</option>
-                      <option value="off-street">Off Street</option>
-                      <option value="garage">Garage</option>
-                      <option value="driveway">Driveway</option>
+                      <option value="Driveway">Driveway</option>
+                      <option value="Off-Street">Off-Street</option>
+                      <option value="Secure Bay">Secure Bay</option>
+                      <option value="On-Street">On-Street</option>
                     </select>
                   )}
 
