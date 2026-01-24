@@ -876,7 +876,7 @@ export default function AdminDashboard() {
     // City filter
     if (selectedFilters.has('city') && filterValues.city) {
       filtered = filtered.filter(property => 
-        property.city === filterValues.city
+        property.city?.toLowerCase().trim() === filterValues.city.toLowerCase().trim()
       );
     }
 
@@ -970,6 +970,22 @@ export default function AdminDashboard() {
       }
     });
     return Array.from(typeMap.values()).sort();
+  }, [properties]);
+
+  // Get unique cities from properties (case-insensitive uniqueness, but preserve original casing for display)
+  const uniqueCities = useMemo(() => {
+    const cityMap = new Map<string, string>();
+    properties.forEach(property => {
+      const city = property.city;
+      if (city && city.trim()) {
+        const normalizedKey = city.toLowerCase().trim();
+        // Use first occurrence's casing for display
+        if (!cityMap.has(normalizedKey)) {
+          cityMap.set(normalizedKey, city.trim());
+        }
+      }
+    });
+    return Array.from(cityMap.values()).sort();
   }, [properties]);
 
   // Filter bookings based on selected filters
@@ -1806,7 +1822,7 @@ export default function AdminDashboard() {
                       className="min-w-32 sm:min-w-52 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
                     >
                       <option value="">Select City</option>
-                      {UK_CITIES.map((city) => (
+                      {uniqueCities.map((city) => (
                         <option key={city} value={city}>
                           {city}
                         </option>
