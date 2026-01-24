@@ -903,13 +903,13 @@ export default function AdminDashboard() {
 
     if (selectedFilters.has('beds') && filterValues.beds) {
       filtered = filtered.filter(property => 
-        property.beds >= parseInt(filterValues.beds)
+        property.beds === parseInt(filterValues.beds)
       );
     }
 
     if (selectedFilters.has('bathrooms') && filterValues.bathrooms) {
       filtered = filtered.filter(property => 
-        property.bathrooms >= parseInt(filterValues.bathrooms)
+        property.bathrooms === parseInt(filterValues.bathrooms)
       );
     }
 
@@ -1873,32 +1873,29 @@ export default function AdminDashboard() {
                   )}
 
                   {selectedFilters.has('beds') && (
-                    <select
-                      value={filterValues.beds}
-                      onChange={(e) => setFilterValues(prev => ({ ...prev, beds: e.target.value }))}
-                      className="min-w-32 sm:min-w-48 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
-                    >
-                      <option value="">Select Minimum Beds</option>
-                      <option value="1">1+ Beds</option>
-                      <option value="2">2+ Beds</option>
-                      <option value="3">3+ Beds</option>
-                      <option value="4">4+ Beds</option>
-                      <option value="5">5+ Beds</option>
-                    </select>
+                    <div className="relative min-w-32 sm:min-w-48">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Enter number of beds"
+                        value={filterValues.beds}
+                        onChange={(e) => setFilterValues(prev => ({ ...prev, beds: e.target.value }))}
+                        className="w-full px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
+                      />
+                    </div>
                   )}
 
                   {selectedFilters.has('bathrooms') && (
-                    <select
-                      value={filterValues.bathrooms}
-                      onChange={(e) => setFilterValues(prev => ({ ...prev, bathrooms: e.target.value }))}
-                      className="min-w-32 sm:min-w-56 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
-                    >
-                      <option value="">Select Minimum Bathrooms</option>
-                      <option value="1">1+ Bathrooms</option>
-                      <option value="2">2+ Bathrooms</option>
-                      <option value="3">3+ Bathrooms</option>
-                      <option value="4">4+ Bathrooms</option>
-                    </select>
+                    <div className="relative min-w-32 sm:min-w-48">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Enter number of bathrooms"
+                        value={filterValues.bathrooms}
+                        onChange={(e) => setFilterValues(prev => ({ ...prev, bathrooms: e.target.value }))}
+                        className="w-full px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
+                      />
+                    </div>
                   )}
 
                   {selectedFilters.has('max_occupancy') && (
