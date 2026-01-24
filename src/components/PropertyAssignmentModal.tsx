@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import SingleDatePicker from '@/components/SingleDatePicker';
 
 interface PropertyAssignmentModalProps {
   isOpen: boolean;
@@ -87,6 +88,7 @@ export default function PropertyAssignmentModal({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_isLoadingBookingData, setIsLoadingBookingData] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [openCalendarFor, setOpenCalendarFor] = useState<'start' | 'end' | null>(null);
 
   const fetchFormData = async () => {
     if (!bookingToAssign || !selectedProperty) return;
@@ -381,6 +383,23 @@ export default function PropertyAssignmentModal({
         [field]: value
       });
     }
+  };
+
+  // Helper function to format date string (YYYY-MM-DD) for display
+  const formatDateForDisplay = (dateString: string): string => {
+    if (!dateString) return '';
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  const handleDateSelect = (field: 'start_date' | 'end_date', date: string) => {
+    handleInputChange(field, date);
+    setOpenCalendarFor(null);
   };
 
   // Function to fetch booking data when booking ID is entered (only for new bookings)
@@ -685,24 +704,60 @@ export default function PropertyAssignmentModal({
                       />
                     </div>
                     
-                    <div>
+                    <div className="relative">
                       <label className="block text-[10px] sm:text-sm font-medium text-gray-700">Start Date</label>
-                      <input
-                        type="date"
-                        value={editableFormData.start_date}
-                        onChange={(e) => handleInputChange('start_date', e.target.value)}
-                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setOpenCalendarFor('start')}
+                        className={`mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal text-left flex items-center justify-between ${editableFormData.start_date ? 'text-gray-900' : 'text-gray-500'}`}
+                      >
+                        <span>
+                          {editableFormData.start_date
+                            ? formatDateForDisplay(editableFormData.start_date)
+                            : 'Select start date'}
+                        </span>
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#008080]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      {/* Start Date Picker */}
+                      {openCalendarFor === 'start' && (
+                        <SingleDatePicker
+                          isOpen={true}
+                          onClose={() => setOpenCalendarFor(null)}
+                          onSelect={(date) => handleDateSelect('start_date', date)}
+                          initialDate={editableFormData.start_date}
+                        />
+                      )}
                     </div>
                     
-                    <div>
+                    <div className="relative">
                       <label className="block text-[10px] sm:text-sm font-medium text-gray-700">End Date</label>
-                      <input
-                        type="date"
-                        value={editableFormData.end_date}
-                        onChange={(e) => handleInputChange('end_date', e.target.value)}
-                        className="mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setOpenCalendarFor('end')}
+                        className={`mt-0.5 sm:mt-1 block w-full px-2 py-1 sm:px-3 sm:py-2 text-[10px] sm:text-sm border border-gray-300 rounded-md shadow-sm focus:ring-booking-teal focus:border-booking-teal text-left flex items-center justify-between ${editableFormData.end_date ? 'text-gray-900' : 'text-gray-500'}`}
+                      >
+                        <span>
+                          {editableFormData.end_date
+                            ? formatDateForDisplay(editableFormData.end_date)
+                            : 'Select end date'}
+                        </span>
+                        <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[#008080]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      {/* End Date Picker */}
+                      {openCalendarFor === 'end' && (
+                        <SingleDatePicker
+                          isOpen={true}
+                          onClose={() => setOpenCalendarFor(null)}
+                          onSelect={(date) => handleDateSelect('end_date', date)}
+                          initialDate={editableFormData.end_date}
+                          minDate={editableFormData.start_date || undefined}
+                          alignRight={true}
+                        />
+                      )}
                     </div>
                     
                     <div>
