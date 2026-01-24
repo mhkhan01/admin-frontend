@@ -163,7 +163,7 @@ export default function PropertyDetailsModal({ isOpen, onClose, property }: Prop
           <div className="flex items-center space-x-3">
             <div className="h-6 sm:h-12 w-auto flex items-center">
               <Image
-                src="/Asset 3@4x.png"
+                src="/blue-teal.webp"
                 alt="Booking Hub Logo"
                 width={120}
                 height={30}
