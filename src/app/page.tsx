@@ -883,7 +883,7 @@ export default function AdminDashboard() {
     // Property type filter
     if (selectedFilters.has('property_type') && filterValues.property_type) {
       filtered = filtered.filter(property => 
-        property.property_type === filterValues.property_type
+        property.property_type?.toLowerCase().trim() === filterValues.property_type.toLowerCase().trim()
       );
     }
 
@@ -955,6 +955,22 @@ export default function AdminDashboard() {
 
     return filtered;
   }, [properties, selectedFilters, filterValues]);
+
+  // Get unique property types from properties (case-insensitive uniqueness, but preserve original casing for display)
+  const uniquePropertyTypes = useMemo(() => {
+    const typeMap = new Map<string, string>();
+    properties.forEach(property => {
+      const type = property.property_type;
+      if (type && type.trim()) {
+        const normalizedKey = type.toLowerCase().trim();
+        // Use first occurrence's casing for display
+        if (!typeMap.has(normalizedKey)) {
+          typeMap.set(normalizedKey, type.trim());
+        }
+      }
+    });
+    return Array.from(typeMap.values()).sort();
+  }, [properties]);
 
   // Filter bookings based on selected filters
   const getFilteredBookings = () => {
@@ -1805,10 +1821,11 @@ export default function AdminDashboard() {
                       className="min-w-32 sm:min-w-56 px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-booking-teal focus:border-transparent"
                     >
                       <option value="">Select Property Type</option>
-                      <option value="apartment">Apartment</option>
-                      <option value="house">House</option>
-                      <option value="studio">Studio</option>
-                      <option value="condo">Condo</option>
+                      {uniquePropertyTypes.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
                     </select>
                   )}
 
