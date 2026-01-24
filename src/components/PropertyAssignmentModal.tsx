@@ -197,25 +197,56 @@ export default function PropertyAssignmentModal({
 
       // Try to fetch booking request data, but don't fail if it doesn't exist
       let bookingRequest = null;
-      const bookingRequestId = bookingToAssign.booking_request_id || bookingToAssign.id.split('-')[0];
       
-      try {
-        const { data: bookingRequestData, error: bookingError } = await supabase
-          .from('booking_requests')
-          .select('*')
-          .eq('id', bookingRequestId)
-          .single();
-
-        console.log('Booking request data:', bookingRequestData);
-        console.log('Booking request error:', bookingError);
-
-        if (!bookingError) {
-          bookingRequest = bookingRequestData;
+      // Extract booking request ID - handle both direct property and composite ID formats
+      let bookingRequestId = bookingToAssign.booking_request_id;
+      
+      // Only use split approach if booking_request_id doesn't exist and ID appears to be composite format
+      // A composite ID would be like: {uuid}-{short_id} where the second part is not a UUID segment
+      if (!bookingRequestId && bookingToAssign.id.includes('-')) {
+        // Check if it's likely a composite ID (has more than 4 dashes suggests it's a full UUID)
+        const parts = bookingToAssign.id.split('-');
+        // If it has exactly 2 parts and second part is short (like BK-224), it's composite
+        // If it has 5 parts, it's likely a full UUID
+        if (parts.length === 2 && parts[1].length < 10) {
+          bookingRequestId = parts[0];
+        } else if (parts.length === 5) {
+          // It's a full UUID, use it as-is
+          bookingRequestId = bookingToAssign.id;
         } else {
-          console.warn('Could not fetch booking request, using fallback data');
+          // Try first part, but validate it's not too short
+          const firstPart = parts[0];
+          if (firstPart.length >= 8) {
+            bookingRequestId = firstPart;
+          }
         }
-      } catch (error) {
-        console.warn('Error fetching booking request:', error);
+      } else if (!bookingRequestId) {
+        // If no booking_request_id and no dashes, use the ID as-is
+        bookingRequestId = bookingToAssign.id;
+      }
+      
+      // Only query if we have a valid-looking ID (at least 8 characters to avoid partial UUIDs)
+      if (bookingRequestId && bookingRequestId.length >= 8) {
+        try {
+          const { data: bookingRequestData, error: bookingError } = await supabase
+            .from('booking_requests')
+            .select('*')
+            .eq('id', bookingRequestId)
+            .single();
+
+          console.log('Booking request data:', bookingRequestData);
+          console.log('Booking request error:', bookingError);
+
+          if (!bookingError) {
+            bookingRequest = bookingRequestData;
+          } else {
+            console.warn('Could not fetch booking request, using fallback data');
+          }
+        } catch (error) {
+          console.warn('Error fetching booking request:', error);
+        }
+      } else {
+        console.warn('Invalid booking request ID format, skipping fetch');
       }
 
       // Fetch contractor data if user_id exists
