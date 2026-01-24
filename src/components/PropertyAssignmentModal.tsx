@@ -591,8 +591,22 @@ export default function PropertyAssignmentModal({
 
         console.log('Successfully saved property assignment:', result);
         
-        // Show success message from backend
-        setSuccessMessage(result.message);
+        // Format success message with month names (keeping full date format)
+        const formatDateToMonthName = (dateString: string): string => {
+          const date = new Date(dateString);
+          return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        };
+        
+        let formattedMessage = result.message;
+        if (editableFormData?.start_date && editableFormData?.end_date) {
+          const startDate = formatDateToMonthName(editableFormData.start_date);
+          const endDate = formatDateToMonthName(editableFormData.end_date);
+          // Replace the date portion in the message with month names while keeping the date format
+          formattedMessage = `Property ${selectedProperty?.id} has been booked from ${startDate} to ${endDate}`;
+        }
+        
+        // Show success message with month names
+        setSuccessMessage(formattedMessage);
         setErrorMessage('');
         setLoading(false);
       } catch (error) {
