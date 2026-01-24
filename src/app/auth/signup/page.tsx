@@ -11,7 +11,12 @@ import { z } from 'zod';
 const signupSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
   email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number')
+    .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
   confirmPassword: z.string(),
   role: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
@@ -33,9 +38,13 @@ export default function AdminSignupPage() {
     register,
     handleSubmit,
     formState: { errors },
+    watch,
   } = useForm<SignupForm>({
     resolver: zodResolver(signupSchema),
   });
+
+  // Watch password for real-time criteria validation
+  const passwordValue = watch('password', '');
 
   const onSubmit = async (data: SignupForm) => {
     setLoading(true);
@@ -233,6 +242,93 @@ export default function AdminSignupPage() {
                   )}
                 </button>
               </div>
+              
+              {/* Password Criteria Checklist */}
+              <div className="mt-2 p-2.5 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-[10px] sm:text-xs text-gray-600 mb-1.5 sm:mb-2 font-medium">Password must contain:</p>
+                <div className="grid grid-cols-2 gap-x-2 gap-y-1 sm:gap-y-1.5">
+                  {/* 8+ characters */}
+                  <div className="flex items-center gap-1.5">
+                    <span className={`flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center transition-colors duration-200 ${passwordValue.length >= 8 ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      {passwordValue.length >= 8 ? (
+                        <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full"></span>
+                      )}
+                    </span>
+                    <span className={`text-[10px] sm:text-xs transition-colors duration-200 ${passwordValue.length >= 8 ? 'text-green-700 font-medium' : 'text-gray-500'}`}>
+                      8+ characters
+                    </span>
+                  </div>
+                  
+                  {/* Uppercase letter */}
+                  <div className="flex items-center gap-1.5">
+                    <span className={`flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center transition-colors duration-200 ${/[A-Z]/.test(passwordValue) ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      {/[A-Z]/.test(passwordValue) ? (
+                        <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full"></span>
+                      )}
+                    </span>
+                    <span className={`text-[10px] sm:text-xs transition-colors duration-200 ${/[A-Z]/.test(passwordValue) ? 'text-green-700 font-medium' : 'text-gray-500'}`}>
+                      Uppercase letter
+                    </span>
+                  </div>
+                  
+                  {/* Lowercase letter */}
+                  <div className="flex items-center gap-1.5">
+                    <span className={`flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center transition-colors duration-200 ${/[a-z]/.test(passwordValue) ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      {/[a-z]/.test(passwordValue) ? (
+                        <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full"></span>
+                      )}
+                    </span>
+                    <span className={`text-[10px] sm:text-xs transition-colors duration-200 ${/[a-z]/.test(passwordValue) ? 'text-green-700 font-medium' : 'text-gray-500'}`}>
+                      Lowercase letter
+                    </span>
+                  </div>
+                  
+                  {/* Number */}
+                  <div className="flex items-center gap-1.5">
+                    <span className={`flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center transition-colors duration-200 ${/[0-9]/.test(passwordValue) ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      {/[0-9]/.test(passwordValue) ? (
+                        <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full"></span>
+                      )}
+                    </span>
+                    <span className={`text-[10px] sm:text-xs transition-colors duration-200 ${/[0-9]/.test(passwordValue) ? 'text-green-700 font-medium' : 'text-gray-500'}`}>
+                      Number
+                    </span>
+                  </div>
+                  
+                  {/* Special character */}
+                  <div className="flex items-center gap-1.5 col-span-2">
+                    <span className={`flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center transition-colors duration-200 ${/[^A-Za-z0-9]/.test(passwordValue) ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      {/[^A-Za-z0-9]/.test(passwordValue) ? (
+                        <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : (
+                        <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-white rounded-full"></span>
+                      )}
+                    </span>
+                    <span className={`text-[10px] sm:text-xs transition-colors duration-200 ${/[^A-Za-z0-9]/.test(passwordValue) ? 'text-green-700 font-medium' : 'text-gray-500'}`}>
+                      Special character (!@#$%^&*)
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
               {errors.password && (
                 <p className="mt-1 text-xs sm:text-sm text-red-600">{errors.password.message}</p>
               )}
