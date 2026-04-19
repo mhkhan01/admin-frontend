@@ -140,7 +140,7 @@ export class ApiService {
     const empty: PaginatedProperties = { data: [], pagination: { page, limit, total: 0, pages: 0 } };
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
-      const response = await fetch(`${backendUrl}/api/properties?page=${page}&limit=${limit}`, {
+      const response = await fetch(`${backendUrl}/properties?page=${page}&limit=${limit}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -176,7 +176,7 @@ export class ApiService {
     try {
       // Call backend API to fetch dashboard stats (requires authentication)
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
-      const response = await fetch(`${backendUrl}/api/properties/stats`, {
+      const response = await fetch(`${backendUrl}/properties/stats`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -220,7 +220,7 @@ export class ApiService {
     const empty: PaginatedBookings = { bookings: [], pagination: { page, limit, total: 0, pages: 0 } };
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
-      const response = await fetch(`${backendUrl}/api/admin-bookings?page=${page}&limit=${limit}`, {
+      const response = await fetch(`${backendUrl}/admin-bookings?page=${page}&limit=${limit}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
