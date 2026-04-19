@@ -139,7 +139,7 @@ export class ApiService {
   async getAllProperties(accessToken: string, page = 1, limit = 20): Promise<PaginatedProperties> {
     const empty: PaginatedProperties = { data: [], pagination: { page, limit, total: 0, pages: 0 } };
     try {
-      const backendUrl = 'http://localhost:5000';
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
       const response = await fetch(`${backendUrl}/api/properties?page=${page}&limit=${limit}`, {
         method: 'GET',
         headers: {
@@ -175,7 +175,7 @@ export class ApiService {
   }> {
     try {
       // Call backend API to fetch dashboard stats (requires authentication)
-      const backendUrl = 'http://localhost:5000';
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
       const response = await fetch(`${backendUrl}/api/properties/stats`, {
         method: 'GET',
         headers: {
@@ -219,7 +219,7 @@ export class ApiService {
   async getAllBookings(accessToken: string, page = 1, limit = 20): Promise<PaginatedBookings> {
     const empty: PaginatedBookings = { bookings: [], pagination: { page, limit, total: 0, pages: 0 } };
     try {
-      const backendUrl = 'http://localhost:5000';
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
       const response = await fetch(`${backendUrl}/api/admin-bookings?page=${page}&limit=${limit}`, {
         method: 'GET',
         headers: {
