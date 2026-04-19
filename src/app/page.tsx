@@ -554,7 +554,7 @@ export default function AdminDashboard() {
 
       // Fetch page 1 of booked properties for the dashboard tile count
       try {
-        const backendUrl = 'http://localhost:5000';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
         const bookedPropertiesResponse = await fetch(`${backendUrl}/api/admin-booked-properties?page=1&limit=20`, {
           method: 'GET',
           headers: {
@@ -601,7 +601,7 @@ export default function AdminDashboard() {
         return;
       }
 
-      const backendUrl = 'http://localhost:5000';
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
       const response = await fetch(`${backendUrl}/api/admin-booked-properties?page=${page}&limit=20`, {
         method: 'GET',
         headers: {
@@ -644,7 +644,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch admin users from backend API with authentication
-      const backendUrl = 'http://localhost:5000';
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
       const response = await fetch(`${backendUrl}/api/admin-users`, {
         method: 'GET',
         headers: {
@@ -688,7 +688,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch platform users from backend API with authentication
-      const backendUrl = 'http://localhost:5000';
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
       const response = await fetch(`${backendUrl}/api/platform-users`, {
         method: 'GET',
         headers: {
@@ -742,7 +742,7 @@ export default function AdminDashboard() {
         }
 
         // Call backend API to activate user (bypasses RLS)
-        const backendUrl = 'http://localhost:5000';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
         const response = await fetch(`${backendUrl}/api/admin-users/activate`, {
           method: 'PUT',
           headers: {
@@ -800,7 +800,7 @@ export default function AdminDashboard() {
         }
 
         // Call backend API to deactivate user (bypasses RLS)
-        const backendUrl = 'http://localhost:5000';
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
         const response = await fetch(`${backendUrl}/api/admin-users/deactivate`, {
           method: 'PUT',
           headers: {
@@ -865,7 +865,7 @@ export default function AdminDashboard() {
       }
 
       // Call backend API to delete user (bypasses RLS)
-      const backendUrl = 'http://localhost:5000';
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://jfgm6v6pkw.us-east-1.awsapprunner.com/api';
       const response = await fetch(`${backendUrl}/api/admin-users/${tableName}/${userId}`, {
         method: 'DELETE',
         headers: {
