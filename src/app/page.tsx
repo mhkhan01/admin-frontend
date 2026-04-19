@@ -346,8 +346,21 @@ export default function AdminDashboard() {
   const [platformUsers, setPlatformUsers] = useState<PlatformUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
-  // Properties pagination state (infinite scroll - 2 rows of 4 = 8 properties at a time)
+  // Properties pagination state — server-side pages, 20 per page
   const [visiblePropertiesCount, setVisiblePropertiesCount] = useState(8);
+  const [propertiesCurrentPage, setPropertiesCurrentPage] = useState(1);
+  const [propertiesTotalPages, setPropertiesTotalPages] = useState(1);
+  const [loadingMoreProperties, setLoadingMoreProperties] = useState(false);
+
+  // Bookings pagination state — server-side pages, 20 per page
+  const [bookingsCurrentPage, setBookingsCurrentPage] = useState(1);
+  const [bookingsTotalPages, setBookingsTotalPages] = useState(1);
+  const [loadingMoreBookings, setLoadingMoreBookings] = useState(false);
+
+  // Booked properties pagination state — server-side pages, 20 per page
+  const [bookedPropertiesCurrentPage, setBookedPropertiesCurrentPage] = useState(1);
+  const [bookedPropertiesTotalPages, setBookedPropertiesTotalPages] = useState(1);
+  const [loadingMoreBookedProperties, setLoadingMoreBookedProperties] = useState(false);
   const propertiesEndRef = useRef<HTMLDivElement>(null);
 
   // Toast notification state
@@ -467,9 +480,32 @@ export default function AdminDashboard() {
   }, [filterValues, selectedFilters]);
 
   // Intersection observer for infinite scroll in All Properties
-  const loadMoreProperties = useCallback(() => {
+  // Shows 8 more at a time from locally loaded data; fetches next server page when exhausted
+  const loadMoreProperties = useCallback(async () => {
+    // Increment the visible count first (synchronous, no side effects in setter)
     setVisiblePropertiesCount(prev => prev + 8);
-  }, []);
+
+    // If all locally loaded properties are already visible and more server pages exist, fetch next page
+    if (visiblePropertiesCount + 8 >= properties.length && propertiesCurrentPage < propertiesTotalPages && !loadingMoreProperties) {
+      setLoadingMoreProperties(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          setLoadingMoreProperties(false);
+          return;
+        }
+        const nextPage = propertiesCurrentPage + 1;
+        const result = await apiService.getAllProperties(sessionData.session.access_token, nextPage, 20);
+        setProperties(existing => [...existing, ...result.data]);
+        setPropertiesCurrentPage(nextPage);
+        setPropertiesTotalPages(result.pagination.pages);
+      } catch (error) {
+        console.error('Error loading more properties:', error);
+      } finally {
+        setLoadingMoreProperties(false);
+      }
+    }
+  }, [visiblePropertiesCount, properties.length, propertiesCurrentPage, propertiesTotalPages, loadingMoreProperties]);
 
   useEffect(() => {
     const sentinel = propertiesEndRef.current;
@@ -501,21 +537,25 @@ export default function AdminDashboard() {
         return;
       }
 
-      // Fetch real data from Supabase (stats and properties now require auth)
-      const [statsData, propertiesData, bookingsData] = await Promise.all([
+      // Fetch page 1 only for properties and bookings — subsequent pages load on scroll
+      const [statsData, propertiesResult, bookingsResult] = await Promise.all([
         apiService.getDashboardStats(sessionData.session.access_token),
-        apiService.getAllProperties(sessionData.session.access_token),
-        apiService.getAllBookings(sessionData.session.access_token)
+        apiService.getAllProperties(sessionData.session.access_token, 1, 20),
+        apiService.getAllBookings(sessionData.session.access_token, 1, 20)
       ]);
 
       setStats(statsData);
-      setProperties(propertiesData);
-      setBookings(bookingsData);
-      
-      // Fetch booked properties to calculate accurate count for the tile
+      setProperties(propertiesResult.data);
+      setPropertiesCurrentPage(1);
+      setPropertiesTotalPages(propertiesResult.pagination.pages);
+      setBookings(bookingsResult.bookings);
+      setBookingsCurrentPage(1);
+      setBookingsTotalPages(bookingsResult.pagination.pages);
+
+      // Fetch page 1 of booked properties for the dashboard tile count
       try {
-        const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
-        const bookedPropertiesResponse = await fetch(`${backendUrl}/api/admin-booked-properties`, {
+        const backendUrl = 'http://localhost:5000';
+        const bookedPropertiesResponse = await fetch(`${backendUrl}/api/admin-booked-properties?page=1&limit=20`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -526,6 +566,8 @@ export default function AdminDashboard() {
         if (bookedPropertiesResponse.ok) {
           const bookedPropertiesResult = await bookedPropertiesResponse.json();
           setBookedProperties(bookedPropertiesResult.bookedProperties || []);
+          setBookedPropertiesCurrentPage(1);
+          setBookedPropertiesTotalPages(bookedPropertiesResult.pagination?.pages ?? 1);
         }
       } catch (error) {
         console.error('Error fetching booked properties in fetchDashboardData:', error);
@@ -548,19 +590,19 @@ export default function AdminDashboard() {
     }
   };
 
-  const fetchBookedProperties = async () => {
+  const fetchBookedProperties = async (page = 1) => {
+    if (page === 1) setBookedProperties([]);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      
+
       if (!sessionData.session) {
         console.error('No session found for fetchBookedProperties');
-        setBookedProperties([]);
+        if (page === 1) setBookedProperties([]);
         return;
       }
 
-      // Call backend API to fetch booked properties with authentication
-      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
-      const response = await fetch(`${backendUrl}/api/admin-booked-properties`, {
+      const backendUrl = 'http://localhost:5000';
+      const response = await fetch(`${backendUrl}/api/admin-booked-properties?page=${page}&limit=20`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -570,16 +612,22 @@ export default function AdminDashboard() {
 
       if (!response.ok) {
         console.error('Failed to fetch booked properties from backend:', response.status, response.statusText);
-        setBookedProperties([]);
+        if (page === 1) setBookedProperties([]);
         return;
       }
 
       const result = await response.json();
       console.log('Booked properties fetched from backend:', result.bookedProperties?.length || 0);
-      setBookedProperties(result.bookedProperties || []);
+      if (page === 1) {
+        setBookedProperties(result.bookedProperties || []);
+      } else {
+        setBookedProperties(existing => [...existing, ...(result.bookedProperties || [])]);
+      }
+      setBookedPropertiesCurrentPage(page);
+      setBookedPropertiesTotalPages(result.pagination?.pages ?? 1);
     } catch (error) {
       console.error('Error fetching booked properties from backend:', error);
-      setBookedProperties([]);
+      if (page === 1) setBookedProperties([]);
     }
   };
 
@@ -596,7 +644,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch admin users from backend API with authentication
-      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+      const backendUrl = 'http://localhost:5000';
       const response = await fetch(`${backendUrl}/api/admin-users`, {
         method: 'GET',
         headers: {
@@ -640,7 +688,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch platform users from backend API with authentication
-      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+      const backendUrl = 'http://localhost:5000';
       const response = await fetch(`${backendUrl}/api/platform-users`, {
         method: 'GET',
         headers: {
@@ -694,7 +742,7 @@ export default function AdminDashboard() {
         }
 
         // Call backend API to activate user (bypasses RLS)
-        const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+        const backendUrl = 'http://localhost:5000';
         const response = await fetch(`${backendUrl}/api/admin-users/activate`, {
           method: 'PUT',
           headers: {
@@ -752,7 +800,7 @@ export default function AdminDashboard() {
         }
 
         // Call backend API to deactivate user (bypasses RLS)
-        const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+        const backendUrl = 'http://localhost:5000';
         const response = await fetch(`${backendUrl}/api/admin-users/deactivate`, {
           method: 'PUT',
           headers: {
@@ -817,7 +865,7 @@ export default function AdminDashboard() {
       }
 
       // Call backend API to delete user (bypasses RLS)
-      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+      const backendUrl = 'http://localhost:5000';
       const response = await fetch(`${backendUrl}/api/admin-users/${tableName}/${userId}`, {
         method: 'DELETE',
         headers: {
@@ -1137,13 +1185,6 @@ export default function AdminDashboard() {
     return filtered;
   };
 
-  // Calculate count of booked properties with status "active" or null
-  const activeBookedPropertiesCount = useMemo(() => {
-    return bookedProperties.filter(property => 
-      property.status === 'active' || property.status === null || property.status === undefined
-    ).length;
-  }, [bookedProperties]);
-
   if (loadingData) {
     return (
       <div className="min-h-screen bg-booking-bg">
@@ -1226,13 +1267,13 @@ export default function AdminDashboard() {
                     </svg>
                   </div>
                 </div>
-                <div className="text-lg sm:text-2xl lg:text-3xl font-bold text-booking-dark mb-1 sm:mb-2">{activeBookedPropertiesCount}</div>
+                <div className="text-lg sm:text-2xl lg:text-3xl font-bold text-booking-dark mb-1 sm:mb-2">{stats.activeBookings}</div>
                 <div className="text-[10px] sm:text-sm text-booking-gray mb-2 sm:mb-3 lg:mb-4">Currently occupied</div>
                 <div className="w-full bg-gray-200 rounded-full h-1.5 sm:h-2 mb-2 sm:mb-3 lg:mb-4">
-                  <div className="bg-green-500 h-1.5 sm:h-2 rounded-full" style={{width: `${Math.min((activeBookedPropertiesCount / stats.totalProperties) * 100, 100)}%`}}></div>
+                  <div className="bg-green-500 h-1.5 sm:h-2 rounded-full" style={{width: `${Math.min((stats.activeBookings / stats.totalProperties) * 100, 100)}%`}}></div>
                 </div>
                 <div className="flex flex-row items-center justify-between gap-1 sm:gap-0 text-[8px] sm:text-sm text-booking-gray">
-                  <span>Occupancy: {Math.round((activeBookedPropertiesCount / stats.totalProperties) * 100)}%</span>
+                  <span>Occupancy: {Math.round((stats.activeBookings / stats.totalProperties) * 100)}%</span>
                   <span>+{Math.floor(Math.random() * 5)}% from last week</span>
                 </div>
               </div>
@@ -1440,7 +1481,7 @@ export default function AdminDashboard() {
 
                   {bookedProperties.length > 0 ? (
                     <div className="space-y-4">
-                      {/* Booking Cards */}
+                      {/* Booked Property Cards */}
                       {getFilteredBookedProperties().map((bookedProperty) => (
                         <div 
                           key={bookedProperty.id}
@@ -1521,6 +1562,24 @@ export default function AdminDashboard() {
                           </div>
                         </div>
                       ))}
+                      {bookedPropertiesCurrentPage < bookedPropertiesTotalPages && (
+                        <div className="flex justify-center pt-2 pb-4">
+                          <button
+                            onClick={async () => {
+                              setLoadingMoreBookedProperties(true);
+                              try {
+                                await fetchBookedProperties(bookedPropertiesCurrentPage + 1);
+                              } finally {
+                                setLoadingMoreBookedProperties(false);
+                              }
+                            }}
+                            disabled={loadingMoreBookedProperties}
+                            className="px-6 py-2 text-sm font-medium text-white bg-booking-teal hover:bg-booking-teal/90 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {loadingMoreBookedProperties ? 'Loading...' : 'Load More'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="card p-12 text-center">
@@ -1712,7 +1771,7 @@ export default function AdminDashboard() {
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-sm sm:text-lg font-semibold text-gray-900">All Requests</h2>
               </div>
-              <AdminBookingTable 
+              <AdminBookingTable
                 bookings={getFilteredBookings()}
                 onAssignProperty={(booking) => {
                   setBookingToAssign(booking);
@@ -1722,6 +1781,33 @@ export default function AdminDashboard() {
                 }}
               />
             </div>
+
+            {bookingsCurrentPage < bookingsTotalPages && (
+              <div className="flex justify-center pt-2 pb-4">
+                <button
+                  onClick={async () => {
+                    setLoadingMoreBookings(true);
+                    try {
+                      const { data: sessionData } = await supabase.auth.getSession();
+                      if (!sessionData.session) return;
+                      const nextPage = bookingsCurrentPage + 1;
+                      const result = await apiService.getAllBookings(sessionData.session.access_token, nextPage, 20);
+                      setBookings(existing => [...existing, ...result.bookings]);
+                      setBookingsCurrentPage(nextPage);
+                      setBookingsTotalPages(result.pagination.pages);
+                    } catch (error) {
+                      console.error('Error loading more bookings:', error);
+                    } finally {
+                      setLoadingMoreBookings(false);
+                    }
+                  }}
+                  disabled={loadingMoreBookings}
+                  className="px-6 py-2 text-sm font-medium text-white bg-booking-teal hover:bg-booking-teal/90 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loadingMoreBookings ? 'Loading...' : 'Load More Requests'}
+                </button>
+              </div>
+            )}
           </div>
         );
 
@@ -2090,9 +2176,9 @@ export default function AdminDashboard() {
                 ))}
               </div>
               {/* Sentinel element for infinite scroll - triggers loading more when visible */}
-              {visiblePropertiesCount < filteredProperties.length && (
-                <div 
-                  ref={propertiesEndRef} 
+              {(visiblePropertiesCount < filteredProperties.length || propertiesCurrentPage < propertiesTotalPages) && (
+                <div
+                  ref={propertiesEndRef}
                   className="flex justify-center items-center py-6"
                 >
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-booking-teal"></div>

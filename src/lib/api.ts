@@ -115,15 +115,32 @@ export interface Booking {
   };
 }
 
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+export interface PaginatedProperties {
+  data: PropertyWithOwner[];
+  pagination: Pagination;
+}
+
+export interface PaginatedBookings {
+  bookings: Booking[];
+  pagination: Pagination;
+}
+
 export class ApiService {
   constructor() {}
 
-  // Properties API - fetch all properties with owner information (requires admin auth)
-  async getAllProperties(accessToken: string): Promise<PropertyWithOwner[]> {
+  // Properties API - fetch paginated properties with owner information (requires admin auth)
+  async getAllProperties(accessToken: string, page = 1, limit = 20): Promise<PaginatedProperties> {
+    const empty: PaginatedProperties = { data: [], pagination: { page, limit, total: 0, pages: 0 } };
     try {
-      // Call backend API to fetch properties (requires authentication)
-      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
-      const response = await fetch(`${backendUrl}/api/properties`, {
+      const backendUrl = 'http://localhost:5000';
+      const response = await fetch(`${backendUrl}/api/properties?page=${page}&limit=${limit}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -133,16 +150,18 @@ export class ApiService {
 
       if (!response.ok) {
         console.error('Failed to fetch properties from backend:', response.status, response.statusText);
-        return [];
+        return empty;
       }
 
       const result = await response.json();
-      console.log('Properties fetched from backend:', result.data?.length || 0);
-      return result.data || [];
+      console.log('Properties fetched from backend:', result.data?.length || 0, '/', result.pagination?.total || 0);
+      return {
+        data: result.data || [],
+        pagination: result.pagination || empty.pagination
+      };
     } catch (error) {
       console.error('Error in getAllProperties:', error);
-      // Return empty array to prevent crashes
-      return [];
+      return empty;
     }
   }
 
@@ -156,7 +175,7 @@ export class ApiService {
   }> {
     try {
       // Call backend API to fetch dashboard stats (requires authentication)
-      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
+      const backendUrl = 'http://localhost:5000';
       const response = await fetch(`${backendUrl}/api/properties/stats`, {
         method: 'GET',
         headers: {
@@ -196,12 +215,12 @@ export class ApiService {
     }
   }
 
-  // Bookings API - fetch all booking requests with related data (requires admin auth)
-  async getAllBookings(accessToken: string): Promise<Booking[]> {
+  // Bookings API - fetch paginated booking requests with related data (requires admin auth)
+  async getAllBookings(accessToken: string, page = 1, limit = 20): Promise<PaginatedBookings> {
+    const empty: PaginatedBookings = { bookings: [], pagination: { page, limit, total: 0, pages: 0 } };
     try {
-      // Call backend API to fetch bookings (requires authentication)
-      const backendUrl = 'https://jfgm6v6pkw.us-east-1.awsapprunner.com';
-      const response = await fetch(`${backendUrl}/api/admin-bookings`, {
+      const backendUrl = 'http://localhost:5000';
+      const response = await fetch(`${backendUrl}/api/admin-bookings?page=${page}&limit=${limit}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -211,16 +230,18 @@ export class ApiService {
 
       if (!response.ok) {
         console.error('Failed to fetch bookings from backend:', response.status, response.statusText);
-        return [];
+        return empty;
       }
 
       const result = await response.json();
-      console.log('Bookings fetched from backend:', result.bookings?.length || 0);
-      return result.bookings || [];
+      console.log('Bookings fetched from backend:', result.bookings?.length || 0, '/', result.pagination?.total || 0);
+      return {
+        bookings: result.bookings || [],
+        pagination: result.pagination || empty.pagination
+      };
     } catch (error) {
       console.error('Error in getAllBookings:', error);
-      // Return empty array to prevent crashes
-      return [];
+      return empty;
     }
   }
 }
