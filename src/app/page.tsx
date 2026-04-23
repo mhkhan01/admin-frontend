@@ -283,6 +283,8 @@ export default function AdminDashboard() {
   });
   const [bookings, setBookings] = useState<AdminBooking[]>([]);
   const [properties, setProperties] = useState<PropertyWithOwner[]>([]);
+  /** When REQUIRE_AUTH, stays false until getSession confirms a user — prevents dashboard paint before redirect. */
+  const [authReady, setAuthReady] = useState(!REQUIRE_AUTH);
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -418,33 +420,37 @@ export default function AdminDashboard() {
     setConfirmModal(prev => ({ ...prev, visible: false }));
   };
 
-  // Authentication check - redirect to login if not authenticated
+  // Authentication check - must complete before dashboard data or shell is shown (avoids logged-out flash)
   useEffect(() => {
     const checkAuth = async () => {
-      if (REQUIRE_AUTH) {
-        try {
-          // Check if user is authenticated via Supabase
-          const { data: { session }, error } = await supabase.auth.getSession();
-          
-          if (error || !session) {
-            console.log('No active session, redirecting to login');
-            router.push('/auth/login');
-            return;
-          }
+      if (!REQUIRE_AUTH) {
+        return;
+      }
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-          console.log('Admin authenticated:', session.user);
-        } catch {
-          router.push('/auth/login');
+        if (error || !session) {
+          console.log('No active session, redirecting to login');
+          router.replace('/auth/login');
+          return;
         }
+
+        console.log('Admin authenticated:', session.user);
+        setAuthReady(true);
+      } catch {
+        router.replace('/auth/login');
       }
     };
 
-    checkAuth();
+    void checkAuth();
   }, [router]);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (!authReady) {
+      return;
+    }
+    void fetchDashboardData();
+  }, [authReady]);
 
   // Fetch users when User Management tab is accessed
   useEffect(() => {
@@ -1185,7 +1191,7 @@ export default function AdminDashboard() {
     return filtered;
   };
 
-  if (loadingData) {
+  if (!authReady || loadingData) {
     return (
       <div className="min-h-screen bg-booking-bg">
         <div className="flex items-center justify-center h-64">
