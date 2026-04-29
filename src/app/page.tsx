@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 const REQUIRE_AUTH = true;
 import PropertyDetailsModal from '@/components/PropertyDetailsModal';
 import PropertyAssignmentModal from '@/components/PropertyAssignmentModal';
+import AdminDashboardSkeleton from '@/components/AdminDashboardSkeleton';
 
 interface DashboardStats {
   totalProperties: number;
@@ -1192,13 +1193,7 @@ export default function AdminDashboard() {
   };
 
   if (!authReady || loadingData) {
-    return (
-      <div className="min-h-screen bg-booking-bg">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-booking-teal"></div>
-        </div>
-      </div>
-    );
+    return <AdminDashboardSkeleton />;
   }
 
   const renderMainContent = () => {
