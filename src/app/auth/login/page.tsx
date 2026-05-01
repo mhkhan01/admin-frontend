@@ -21,8 +21,14 @@ function LoginPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  /** Inputs mount only after hydration so browser extensions cannot inject attrs (e.g. fdprocessedid) before React attaches. */
+  const [formMounted, setFormMounted] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    setFormMounted(true);
+  }, []);
 
   useEffect(() => {
     const message = searchParams.get('message');
@@ -174,6 +180,18 @@ function LoginPageContent() {
             Sign In to Admin Portal
           </h1>
 
+          {!formMounted ? (
+            <div
+              className="space-y-3 sm:space-y-6 animate-pulse"
+              aria-hidden
+            >
+              <div className="h-10 sm:h-12 bg-gray-200/80 rounded" />
+              <div className="h-10 sm:h-12 bg-gray-200/80 rounded" />
+              <div className="h-12 sm:h-14 bg-gray-200/80 rounded" />
+              <div className="h-4 bg-gray-200/60 rounded w-2/3 mx-auto" />
+              <div className="h-4 bg-gray-200/60 rounded w-1/2 mx-auto" />
+            </div>
+          ) : (
           <form className="space-y-3 sm:space-y-6" onSubmit={handleSubmit(onSubmit)}>
             {error && (
               <div className="rounded-xl bg-red-50 border border-red-200 p-3 sm:p-4">
@@ -284,6 +302,7 @@ function LoginPageContent() {
               </Link>
             </div>
           </form>
+          )}
         </div>
       </div>
     </div>

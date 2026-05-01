@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 
 export const metadata: Metadata = {
   title: 'Scheduled maintenance | Admin Portal',
@@ -11,10 +12,13 @@ export default function SorryForTheInconveniencePage() {
   return (
     <main className="min-h-screen w-full flex flex-col items-center justify-center px-5 sm:px-6 py-10 sm:py-12 bg-booking-bg">
       <div className="card w-full max-w-lg p-8 sm:p-10 lg:p-12 text-center">
-        <img
+        <Image
           src="/blue-teal.webp"
           alt="Booking Hub Logo"
+          width={240}
+          height={64}
           className="h-12 sm:h-14 w-auto mx-auto mb-8 object-contain max-w-full"
+          priority
         />
         <h1 className="text-2xl sm:text-3xl font-bold text-booking-dark mb-4 sm:mb-5 leading-tight">
           Sorry for the inconvenience

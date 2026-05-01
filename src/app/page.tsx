@@ -1192,7 +1192,13 @@ export default function AdminDashboard() {
     return filtered;
   };
 
-  if (!authReady || loadingData) {
+  // While session is unknown, render nothing — body background shows until getSession + redirect.
+  // (Avoid dashboard skeleton and avoid a dedicated loading screen for this transient state.)
+  if (REQUIRE_AUTH && !authReady) {
+    return null;
+  }
+
+  if (loadingData) {
     return <AdminDashboardSkeleton />;
   }
 
